@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: inventory-sample-pilot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r cloud/requirements.txt
+    startCommand: python cloud_start.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: INVENTORY_POSTGRES_URL
+        sync: false

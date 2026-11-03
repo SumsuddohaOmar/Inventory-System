@@ -1,0 +1,3 @@
+# HTTPX lets FastAPI's TestClient exercise real routes without opening a port.
+-r requirements.txt
+httpx>=0.27,<1
