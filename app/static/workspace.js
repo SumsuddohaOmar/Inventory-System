@@ -35,10 +35,11 @@ function table(headers, rows, target) {
 }
 
 async function loadWorkspace() {
-  try{companyPreferences=await request("/api/company");}catch{}
+  const preferences = request("/api/company").catch(()=>companyPreferences);
   byId("connection-address").textContent=location.origin;
   byId("connection-help").textContent=location.hostname==="127.0.0.1"||location.hostname==="localhost"?"This address works only on this computer. Configure local HTTPS before connecting Android; see docs/ANDROID.md.":"Use the same local Wi-Fi and install your own server's CA certificate before scanning. You can also type the address manually.";
   catalog=await request("/api/catalog");
+  companyPreferences=await preferences;
   // Initialize the entire authorized history for offline use, not just products
   // whose detail panels happen to have been opened while connected.
   for(const product of catalog) await localPut("cache", {id:`${currentUser.id}:/api/products/${product.id}/stock`,value:product.stock});
@@ -50,7 +51,6 @@ async function loadWorkspace() {
     if(Number(product.stock.balance)<=product.low_stock_minor/(10**product.precision)) element("li",`Low stock: ${product.name} — ${product.stock.balance} ${product.unit}`,byId("low-stock"));
   }
   for(const panel of document.querySelectorAll("[data-permission]")) panel.hidden=!permitted(panel.dataset.permission);
-  if(permitted("products"))try{await listCategories();}catch{}
   byId("reports-section").hidden=!permitted("reports");
   byId("bulk-section").hidden=!(permitted("receive")||permitted("issue"));
   byId("product-form").closest("section").hidden=!permitted("products");
@@ -73,8 +73,8 @@ async function loadWorkspace() {
   showManagedProduct();
   showActivity();
   await renderQueue();
-  await listDrafts();
-  await Promise.allSettled([permitted("reports")?listReports():Promise.resolve(),permitted("users")?listEmployees():Promise.resolve(),
+  // Populate secondary screens after the product workspace is usable.
+  void Promise.allSettled([listDrafts(),permitted("products")?listCategories():Promise.resolve(),permitted("reports")?listReports():Promise.resolve(),permitted("users")?listEmployees():Promise.resolve(),
     permitted("settings")?loadSettings():Promise.resolve(),permitted("backups")?listBackups():Promise.resolve()]);
   if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{status.textContent="Offline installation needs a trusted secure connection.";});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});

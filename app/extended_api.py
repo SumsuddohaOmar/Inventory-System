@@ -272,10 +272,16 @@ def register(application, path):
     def catalog():
         with database.connect(path) as connection:
             connection.execute("BEGIN")
+            today = stock.company_today(connection)
+            entries = {}
+            for entry in connection.execute(
+                "SELECT * FROM stock_entries ORDER BY product_id, effective_date DESC, created_at DESC, id"
+            ):
+                entries.setdefault(entry["product_id"], []).append(entry)
             result = []
             for row in connection.execute("SELECT * FROM products ORDER BY sort_order,name").fetchall():
                 product = dict(row)
-                product["stock"] = stock._summary(connection, product)
+                product["stock"] = stock.summarize(product, entries.get(product["id"], ()), today)
                 result.append(product)
             return result
 

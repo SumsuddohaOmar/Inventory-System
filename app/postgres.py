@@ -2,6 +2,10 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from threading import Lock
+
+_pools = {}
+_pool_lock = Lock()
 
 
 @dataclass(frozen=True)
@@ -41,9 +45,17 @@ class Connection:
 
 @contextmanager
 def connect(target):
-    import psycopg
+    from psycopg_pool import ConnectionPool
 
-    with psycopg.connect(target.dsn, row_factory=row_factory, connect_timeout=5) as connection:
+    with _pool_lock:
+        if target not in _pools:
+            _pools[target] = ConnectionPool(
+                target.dsn, min_size=0, max_size=4, max_idle=60,
+                timeout=10, open=True,
+                kwargs={"row_factory": row_factory, "connect_timeout": 5},
+            )
+        pool = _pools[target]
+    with pool.connection() as connection:
         connection.execute("SET LOCAL lock_timeout = '5s'")
         # Serialize pilot transactions to preserve SQLite's stock write ordering.
         # This is intentionally coarse and applies only within one database.

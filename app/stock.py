@@ -85,6 +85,11 @@ def _summary(connection, product: dict) -> dict:
         "SELECT * FROM stock_entries WHERE product_id = ? ORDER BY effective_date DESC, created_at DESC, id",
         (product["id"],),
     ).fetchall()
+    return summarize(product, rows, company_today(connection))
+
+
+def summarize(product, rows, today):
+    """Derive a product snapshot from ordered ledger rows and a shared date."""
     totals = {kind: sum(row["quantity_minor"] for row in rows if row["kind"] == kind and not row["voided"])
               for kind in ("opening", "receive", "issue")}
     precision = product["precision"]
@@ -95,7 +100,7 @@ def _summary(connection, product: dict) -> dict:
         "received": display(totals["receive"], precision),
         "issued": display(totals["issue"], precision),
         "balance": display(totals["opening"] + totals["receive"] - totals["issue"], precision),
-        "today": company_today(connection), "entries": [public_entry(row, precision) for row in rows],
+        "today": today, "entries": [public_entry(row, precision) for row in rows],
     }
 
 
