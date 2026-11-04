@@ -398,6 +398,8 @@ byId("template-save-form").addEventListener("submit",async(event)=>{event.preven
 function showInventoryScreen() {
   const links = [...document.querySelectorAll(".screen-nav a")];
   const selected = links.find(link => link.hash === location.hash) || links[0];
+  const previous = links.find(link => link.hasAttribute("aria-current"));
+  if (previous && previous !== selected) byId("status").textContent = "";
   for (const link of links) {
     if (link === selected) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
