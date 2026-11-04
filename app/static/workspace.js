@@ -279,6 +279,11 @@ function auditSnapshot(value) {
   catch { return value; }
 }
 
+function auditDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
 function showAuditSnapshot(label, snapshot, parent) {
   element("h4", label, parent);
   if (snapshot === null) {
@@ -287,14 +292,38 @@ function showAuditSnapshot(label, snapshot, parent) {
     element("p", String(snapshot), parent);
   } else {
     const fields = element("dl", undefined, parent);
+    function field(label, value) {
+      if (value === null || value === "") return;
+      element("dt", label, fields);
+      element("dd", String(value), fields);
+    }
     for (const [key, value] of Object.entries(snapshot)) {
-      if (value === null || value === "") continue;
+      if (value === null || value === "" || key === "id") continue;
+      if (key === "fields_json") {
+        const custom = auditSnapshot(value);
+        if (custom && typeof custom === "object") {
+          for (const [label, setting] of Object.entries(custom)) field(label, setting);
+        }
+        continue;
+      }
+      if (key === "category_id") {
+        const category = categories.find(item => item.id === value);
+        field("Category", category?.name || String(value).replaceAll("-", " "));
+        continue;
+      }
       const name = key.replaceAll("_", " ");
-      element("dt", name.charAt(0).toUpperCase() + name.slice(1), fields);
-      const shown = ["archived", "voided", "active"].includes(key) && [0, 1, true, false].includes(value)
-        ? (value ? "Yes" : "No")
-        : typeof value === "object" ? JSON.stringify(value) : String(value);
-      element("dd", shown, fields);
+      const labels = {precision: "Decimal places", low_stock_minor: "Low-stock alert"};
+      let shown = value;
+      if (["archived", "voided", "active"].includes(key) && [0, 1, true, false].includes(value)) {
+        shown = value ? "Yes" : "No";
+      } else if (key.endsWith("_at")) {
+        shown = auditDate(value);
+      } else if (key === "low_stock_minor" && Number.isInteger(snapshot.precision)) {
+        shown = minorText(BigInt(value), snapshot.precision);
+      } else if (typeof value === "object") {
+        shown = JSON.stringify(value);
+      }
+      field(labels[key] || name.charAt(0).toUpperCase() + name.slice(1), shown);
     }
   }
 }
@@ -315,8 +344,7 @@ byId("audit-refresh").addEventListener("click", async (event) => {
       const action = row.action.replaceAll(".", " ").replaceAll("_", " ");
       const item = element("li", undefined, list);
       element("strong", action.charAt(0).toUpperCase() + action.slice(1) + (name ? ` · ${name}` : ""), item);
-      const date = new Date(row.created_at);
-      const time = Number.isNaN(date.getTime()) ? row.created_at : date.toLocaleString();
+      const time = auditDate(row.created_at);
       const actor = row.actor_name || (row.actor === "local-owner" ? "Local owner" : row.actor);
       element("p", `${time} · By ${actor}`, item);
       if (before !== null || after !== null) {
