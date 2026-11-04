@@ -7,6 +7,30 @@
 let currentUser = null;
 let syncing = false;
 
+// Older Safari versions have secure random bytes but may lack randomUUID.
+function inventoryUUID() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+}
+
+async function inventoryFetch(url, options = {}) {
+  if (options.signal) return fetch(url, options);
+  if (typeof AbortSignal.timeout === "function") {
+    return fetch(url, {...options, signal: AbortSignal.timeout(12000)});
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    return await fetch(url, {...options, signal: controller.signal});
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function localDB() {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open("local-inventory-v1", 1);
@@ -40,7 +64,7 @@ async function offlineRequest(url, options={}) {
   const cacheable = !options.method && currentUser && (url==="/openapi.json" || /^\/api\/(products|categories|catalog|company)/.test(url));
   const key = currentUser ? `${currentUser.id}:${url}` : "";
   try {
-    const response = await fetch(url, {...options, signal: options.signal || AbortSignal.timeout(12000)});
+    const response = await inventoryFetch(url, options);
     if (response.ok && cacheable) {
       // A full browser disk must not turn a confirmed server save/read into a
       // network failure. Warn that this device cannot promise offline reads.
@@ -101,7 +125,7 @@ async function renderQueue() {
       retry.addEventListener("click", async()=>{
         // Preserve the rejected version before replacing the active queued row.
         await localPut("conflicts", {...row, reviewed_at:Date.now()});
-        const identity = crypto.randomUUID();
+        const identity = inventoryUUID();
         const next = {...row,id:identity,payload:{...row.payload,id:identity,quantity:amount.value},state:"pending",reason:"",resolves_id:row.id};
         await localPut("outbox", next);
         for (const dependent of rows.filter(value=>value.depends_on.includes(row.id))) {

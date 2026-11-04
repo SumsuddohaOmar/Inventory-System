@@ -8,7 +8,7 @@ let pinUnlocked = false;
 async function sessionGate() {
   let session;
   try {
-    const response = await fetch("/api/session", {signal:AbortSignal.timeout(12000)});
+    const response = await inventoryFetch("/api/session");
     if (!response.ok) throw new Error("Account status is unavailable.");
     session = await response.json();
     needsSetup = !session.configured && !session.operator_setup;
@@ -20,7 +20,7 @@ async function sessionGate() {
       catch { document.querySelector("#sync-status").textContent="Browser storage unavailable. Offline sign-in cannot be prepared."; }
     }
   } catch {
-    currentUser = (await localGet("meta","last-user"))?.value || null;
+    currentUser = (await localGet("meta","last-user").catch(() => null))?.value || null;
   }
   document.querySelector("#auth-title").textContent = needsSetup ? "Set up your administrator account" : "Sign in to your inventory";
   document.querySelector("#auth-help").textContent = needsSetup ? "Choose your own username and a password of at least 12 characters. Your saved inventory is preserved." : "Use your account password. Trusted-device sessions can be remembered.";

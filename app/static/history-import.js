@@ -7,7 +7,7 @@
 let historySource = null;
 let historyColumns = {};
 let historyControls = [];
-let historyOperation = crypto.randomUUID();
+let historyOperation = inventoryUUID();
 
 function historyInput(parent, identity, label, type, value="") {
   const text = element("label", label, parent);
@@ -85,7 +85,7 @@ byId("history-map-form").addEventListener("submit", async(event)=>{
     const preview = await request("/api/history-import/preview", {method:"POST",
       headers:{"Content-Type":"application/json"},body:JSON.stringify({...historySource,mapping,
         date_format:byId("history-date-format").value})});
-    historyOperation = crypto.randomUUID();
+    historyOperation = inventoryUUID();
     historyControls = [];
     const target = byId("history-review-rows");
     target.replaceChildren();

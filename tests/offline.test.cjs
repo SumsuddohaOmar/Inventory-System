@@ -7,9 +7,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function browser(fetch, store) {
+function browser(fetch, store, timeoutSignal = AbortSignal) {
   const status = {textContent:''};
-  const context = vm.createContext({fetch, Response, URL, AbortSignal,
+  const context = vm.createContext({fetch, Response, URL, AbortSignal: timeoutSignal, AbortController, setTimeout, clearTimeout,
     location:{origin:'http://localhost:8000'},
     window:{addEventListener(){}}, setInterval(){},
     document:{querySelector(){return status;}}, mockStore:store});
@@ -45,4 +45,12 @@ test('a rejected online write is never silently put in the offline outbox', asyn
   const response=await app.request('/api/products/example/stock',{method:'POST',body:'{}'});
   assert.equal(response.status,403);
   assert.equal(writes,0);
+});
+
+test('a browser without AbortSignal.timeout can still send authenticated API requests', async () => {
+  const app = browser(async (_url, options) => {
+    assert.ok(options.signal instanceof AbortSignal);
+    return new Response('{}');
+  }, async () => undefined, {});
+  assert.equal((await app.request('/api/company')).status, 200);
 });

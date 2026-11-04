@@ -23,10 +23,10 @@ function stockDetails(product) {
     /* Build a complete view from the server snapshot. textContent ensures notes
        and product names remain plain text, never executable page markup. */
     const snapshot = await request(`/api/products/${product.id}/stock`);
-    const pendingOpening=(await localAll("outbox")).find(row=>row.owner===currentUser.id&&row.product_id===product.id&&row.payload.kind==="opening");
+    const pendingOpening=(await localAll("outbox").catch(() => [])).find(row=>row.owner===currentUser.id&&row.product_id===product.id&&row.payload.kind==="opening");
     const hasOpening=snapshot.initialized||!!pendingOpening;
     const cachedProduct=catalog.find(value=>value.id===product.id);
-    if(cachedProduct){cachedProduct.stock=snapshot;await localPut("cache",{id:`${currentUser.id}:/api/catalog`,value:catalog});}
+    if(cachedProduct){cachedProduct.stock=snapshot;await localPut("cache",{id:`${currentUser.id}:/api/catalog`,value:catalog}).catch(() => {});}
     content.replaceChildren();
     const totals = document.createElement("div");
     totals.className = "stock-totals";
@@ -97,7 +97,7 @@ function stockDetails(product) {
       const values = { kind: kind.value, effective_date: day.value, quantity: quantity.value.trim(), notes: notes.value.trim() };
       const fingerprint = JSON.stringify(values);
       // Identical retry => identical UUID. Edited values => a distinct operation.
-      if (!pending || pending.fingerprint !== fingerprint) pending = { fingerprint, id: crypto.randomUUID() };
+      if (!pending || pending.fingerprint !== fingerprint) pending = { fingerprint, id: inventoryUUID() };
       submit.disabled = true;
       feedback.textContent = "";
       status.textContent = "Saving stock entry…";
