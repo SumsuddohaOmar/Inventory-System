@@ -163,10 +163,10 @@ def register(application, path):
     async def access_control(request: Request, call_next):
         """Authenticate before serving data and reject unexpected browser origins."""
         route = request.url.path
-        if application.state.postgres_pilot and route.startswith(
+        if application.state.postgres_pilot and route != "/api/import/preview" and route.startswith(
             ("/api/backups", "/api/import", "/api/history-import")
         ):
-            return JSONResponse(status_code=501, content={"detail": "This workflow needs cloud backup support."})
+            return JSONResponse(status_code=501, content={"detail": "Unavailable on the hosted pilot until cloud backup and restore are verified. No data was changed."})
         if route.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             expected_origin = application.state.public_origin or str(request.base_url).rstrip("/")

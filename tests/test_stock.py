@@ -77,7 +77,7 @@ class StockTests(unittest.TestCase):
         """A rejected issue must change neither the ledger nor the balance."""
         self.save("opening", "10")
         before = stock.get_stock(self.path, self.product["id"])
-        with self.assertRaises(stock.StockError): self.save("issue", "10.001")
+        with self.assertRaisesRegex(stock.StockError, r"Available: 10\.000"): self.save("issue", "10.001")
         self.assertEqual(stock.get_stock(self.path, self.product["id"]), before)
 
     def test_backdated_issue_validates_historical_balances(self):
@@ -85,7 +85,7 @@ class StockTests(unittest.TestCase):
         self.save("opening", "10", "2026-10-30")
         self.save("issue", "8", "2026-10-31")
         self.save("receive", "100", "2026-11-02")
-        with self.assertRaises(stock.StockError): self.save("issue", "3", "2026-10-31")
+        with self.assertRaisesRegex(stock.StockError, r"2026-10-31.*Available: 2\.000"): self.save("issue", "3", "2026-10-31")
         self.assertEqual(stock.get_stock(self.path, self.product["id"])["balance"], "102.000")
 
     def test_date_limits_and_valid_backdated_receipt(self):

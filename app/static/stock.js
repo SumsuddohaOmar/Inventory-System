@@ -83,7 +83,12 @@ function stockDetails(product) {
     submit.textContent = hasOpening ? "Save stock entry" : "Save opening stock";
     const checkPermission=()=>{submit.disabled=!permitted(kind.value==="issue"?"issue":"receive");};
     kind.addEventListener("change",checkPermission);checkPermission();
-    editor.append(submit);
+    const feedback = document.createElement("p");
+    feedback.id = `stock-error-${product.id}`;
+    feedback.className = "stock-error";
+    feedback.setAttribute("role", "alert");
+    quantity.setAttribute("aria-describedby", feedback.id);
+    editor.append(submit, feedback);
     content.append(editor);
     let pending = null;
     editor.addEventListener("submit", async (event) => {
@@ -94,6 +99,7 @@ function stockDetails(product) {
       // Identical retry => identical UUID. Edited values => a distinct operation.
       if (!pending || pending.fingerprint !== fingerprint) pending = { fingerprint, id: crypto.randomUUID() };
       submit.disabled = true;
+      feedback.textContent = "";
       status.textContent = "Saving stock entry…";
       try {
         const result = await request(`/api/products/${product.id}/stock`, {
@@ -107,7 +113,7 @@ function stockDetails(product) {
         try { await renderStock(); heading.focus(); }
         catch { loaded = false; status.textContent = "Entry was saved. Close and reopen stock details to refresh the balance."; }
       } catch (error) {
-        status.textContent = error.rejected ? `Not saved: ${error.message}`
+        feedback.textContent = error.rejected ? `Not saved: ${error.message}`
           : `Save could not be confirmed. ${error.message} Close and reopen stock details to check history before entering different data.`;
       } finally { checkPermission(); }
     });

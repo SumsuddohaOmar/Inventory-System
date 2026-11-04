@@ -33,7 +33,12 @@ def read_file(filename, encoded, sheet=0):
     data=base64.b64decode(encoded,validate=True)
     if len(data)>2_000_000: raise stock.StockError("Import file must be under 2 MB.")
     if filename.lower().endswith(".csv"):
-        rows=list(csv.reader(StringIO(data.decode("utf-8-sig"))))
+        try:
+            rows = list(csv.reader(StringIO(data.decode("utf-8-sig")), strict=True))
+        except UnicodeDecodeError as error:
+            raise stock.StockError("Save the file as CSV UTF-8 in Excel, or upload the .xlsx workbook.") from error
+        except csv.Error as error:
+            raise stock.StockError("The CSV has invalid quoting. Export it again as CSV UTF-8.") from error
         if len(rows)>10000: raise stock.StockError("Import has too many rows.")
         return ["CSV"],rows
     if not filename.lower().endswith(".xlsx"): raise stock.StockError("Use .xlsx or UTF-8 .csv files.")

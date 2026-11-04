@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field
@@ -164,7 +164,11 @@ def create_app(database_path: Path | None = None) -> FastAPI:
     @application.get("/", include_in_schema=False)
     def home():
         """Return the accessible browser page; assets are all served locally."""
-        return FileResponse(STATIC / "index.html")
+        # Render the storage label from the server configuration, even offline
+        # when the browser uses its cached copy of this app shell.
+        page = (STATIC / "index.html").read_text(encoding="utf-8")
+        storage = "Cloud storage: PostgreSQL" if dsn else "Local storage: SQLite"
+        return HTMLResponse(page.replace("Inventory workspace · No subscription", f"{storage} · No subscription"))
 
     @application.get("/api/products", response_model=list[Product])
     def products(category_id: str | None = None):

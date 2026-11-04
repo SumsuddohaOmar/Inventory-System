@@ -133,6 +133,10 @@ async function saveDraft() {
 async function restoreLocalDraft(identity) {
   const saved=(await localGet("meta",`draft:${currentUser.id}:${identity}`))?.value;
   if(!saved)return;
+  if (!["receive", "issue"].includes(saved.kind)) {
+    byId("draft-status").textContent = "This opening-stock draft is preserved. Use Products → Stock details to enter opening balances.";
+    return;
+  }
   draftIdentity=saved.identity;draftRevision=saved.revision;bulkValues=new Map(saved.values);
   byId("bulk-category").value=saved.category;byId("bulk-kind").value=saved.kind;byId("bulk-date").value=saved.date;byId("bulk-notes").value=saved.notes;
 }
@@ -147,6 +151,7 @@ async function listDrafts() {
     const item=element("li",undefined,target),button=element("button",`Open Windows-saved draft · ${entries[0].effective_date}`,item);button.type="button";button.className="secondary";
     button.addEventListener("click",async()=>{
       if(new Set(entries.map(entry=>`${entry.kind}:${entry.effective_date}`)).size>1){status.textContent="This draft contains different dates/types. It has been preserved unchanged.";return;}
+      if (entries[0].kind === "opening") { byId("draft-status").textContent = "This opening-stock draft is preserved. Use Products → Stock details."; return; }
       const first=entries[0],product=catalog.find(value=>value.id===first.product_id);
       const value={identity:saved.id,revision:saved.revision,values:entries.map(entry=>[entry.product_id,{id:entry.id,quantity:entry.quantity,notes:entry.notes}]),category:product?.category_id||categories[0]?.id,kind:first.kind,date:first.effective_date,notes:""};
       await localPut("meta",{id:`draft:${currentUser.id}:${saved.id}`,value});await localPut("meta",{id:`active-draft:${currentUser.id}`,value:saved.id});await restoreLocalDraft(saved.id);drawBulkRows();byId("bulk-section").scrollIntoView();
@@ -169,7 +174,7 @@ byId("bulk-form").addEventListener("submit",async(event)=>{
     await request(`/api/drafts/${draftIdentity}/finalize`,{method:"POST"});
     status.textContent="Bulk entry finalized. All products saved together.";
   }catch(error){
-    if(error.rejected){status.textContent=`Not finalized: ${error.message} Your draft is kept.`;return;}
+    if(error.rejected){byId("draft-status").textContent=`Not finalized: ${error.message} Your draft is kept.`;return;}
     const today=businessToday();
     if(rows.some(row=>row.effective_date>today)){status.textContent="Future-dated entries remain drafts. Review and finalize them on or after their date.";return;}
     await queueRows(rows);status.textContent="Bulk rows kept offline for sync. Pending entries are not included in confirmed balances.";
@@ -297,7 +302,13 @@ async function listCategories(){byId("category-management").replaceChildren();fo
 }}
 
 let importRows=[];let importChoices=[];let importOperation=crypto.randomUUID();
-byId("import-preview-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const file=byId("import-file").files[0];if(file.size>2000000)throw new Error("Use a file under 2 MB.");
+byId("import-preview-form").addEventListener("submit",async(event)=>{event.preventDefault();
+  const feedback = byId("import-feedback"), button = event.submitter;
+  button.disabled = true;
+  byId("import-apply-form").hidden = true;
+  feedback.textContent = "Reading file…";
+  try{const file=byId("import-file").files[0];if(!file || !/\.(xlsx|csv)$/i.test(file.name)) throw new Error("Choose an .xlsx workbook or UTF-8 .csv file. Save older .xls files as .xlsx first.");
+  if(file.size>2000000)throw new Error("Use a file under 2 MB.");
   const bytes=new Uint8Array(await file.arrayBuffer());let binary="";for(const byte of bytes)binary+=String.fromCharCode(byte);
   const preview=await request("/api/import/preview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,data:btoa(binary),sheet:Number(byId("import-sheet").value)-1,header_row:Number(byId("import-header").value)})});
   importRows=preview.rows;importChoices=[];importOperation=crypto.randomUUID();byId("import-preview").replaceChildren();
@@ -307,12 +318,12 @@ byId("import-preview-form").addEventListener("submit",async(event)=>{event.preve
     select.value=row.matches.length?"skip":"create";
     const unitLabel=element("label","Unit for new product",box),unit=element("input",undefined,box);unit.id=`import-unit-${index}`;unitLabel.htmlFor=unit.id;unit.value=row.unit;unit.maxLength=30;
     element("p",`Opening: ${row.opening||"not imported"}; Code: ${row.code||"none"}`,box);importChoices.push({select,unit});
-  }byId("import-apply-form").hidden=false;status.textContent=`Preview ready: ${importRows.length} rows. No inventory changed.`;
-}catch(error){status.textContent=error.message;}});
+  }byId("import-apply-form").hidden=false;feedback.textContent=`Preview ready: ${importRows.length} rows. No inventory changed.`;
+}catch(error){feedback.textContent=error.message;}finally{button.disabled=false;}});
 byId("import-apply-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const rows=importRows.map((row,index)=>{const choice=importChoices[index];return {...row,unit:choice.unit.value,action:["create","skip"].includes(choice.select.value)?choice.select.value:"link",target_id:["create","skip"].includes(choice.select.value)?null:choice.select.value};});
   await request("/api/import/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:importOperation,category_id:byId("import-category").value,date:byId("import-date").value,rows})});
-  byId("import-apply-form").hidden=true;await loadWorkspace();await loadProducts();status.textContent="Reviewed import applied with a pre-import backup.";
-}catch(error){status.textContent=error.message;}});
+  byId("import-apply-form").hidden=true;await loadWorkspace();await loadProducts();byId("import-feedback").textContent="Reviewed import applied with a pre-import backup.";
+}catch(error){byId("import-feedback").textContent=error.message;}});
 
 let templateData="";let templateControls=[];
 byId("template-inspect-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const file=byId("template-file").files[0];if(file.size>2000000)throw new Error("Use a template under 2 MB.");const bytes=new Uint8Array(await file.arrayBuffer());let binary="";for(const byte of bytes)binary+=String.fromCharCode(byte);templateData=btoa(binary);
@@ -336,3 +347,18 @@ byId("template-inspect-form").addEventListener("submit",async(event)=>{event.pre
 byId("template-save-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const mapping=templateControls.filter(row=>row.fields.sheet.value).map(({category,fields})=>({category_id:category.id,sheet:fields.sheet.value,start_row:Number(fields.start_row.value),end_row:Number(fields.end_row.value),opening_mode:fields.opening_mode.value,period_style:"company",title_cell:fields.title_cell.value.trim().toUpperCase(),period_cell:fields.period_cell.value.trim().toUpperCase(),issue_period_cell:fields.issue_period_cell.value.trim().toUpperCase(),columns:Object.fromEntries(Object.entries(fields).filter(([key,value])=>!["sheet","start_row","end_row","opening_mode","title_cell","period_cell","issue_period_cell"].includes(key)&&value.value.trim()).map(([key,value])=>[key,value.value.trim().toUpperCase()]))}));
   await request("/api/templates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("template-name").value,data:templateData,mapping})});await listReports();status.textContent="Mapped company template saved. Existing report versions can now use it.";
 }catch(error){status.textContent=error.message;}});
+
+// Screen changes hide panels without rebuilding their forms or losing draft input.
+function showInventoryScreen() {
+  const links = [...document.querySelectorAll(".screen-nav a")];
+  const selected = links.find(link => link.hash === location.hash) || links[0];
+  for (const link of links) {
+    if (link === selected) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  for (const panel of document.querySelectorAll("[data-screen]"))
+    panel.hidden = "#" + panel.dataset.screen !== selected.hash;
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", showInventoryScreen);
+showInventoryScreen();

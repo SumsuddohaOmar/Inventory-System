@@ -29,24 +29,16 @@
   </section>
   <section id="pin-panel" hidden aria-labelledby="pin-title"><h2 id="pin-title">Unlock saved inventory</h2><p>This PIN locks the app screen. It does not encrypt browser storage or replace device security.</p><form id="pin-unlock-form"><label for="unlock-pin">App PIN</label><input id="unlock-pin" type="password" inputmode="numeric" required autocomplete="off"><button>Unlock</button></form><button id="pin-use-password" type="button" class="secondary">Sign in with account password instead</button><p id="pin-error" role="alert"></p></section>
   <main id="main" hidden>
-    <nav aria-label="Inventory workspace"><a href="#dashboard">Overview</a> · <a href="#bulk-section">Bulk entry</a> · <a href="#activity-section">Activity</a> · <a href="#reports-section">Reports</a> · <a href="#admin-section">Administration</a></nav>
+<nav class="screen-nav" aria-label="Inventory workspace"><a href="#dashboard">Dashboard</a><a href="#products">Products</a><a href="#entry">Entry</a><a href="#history">History</a><a href="#reports">Reports</a><a href="#settings">Settings</a></nav>
+    <div data-screen="dashboard">
     <aside id="dashboard"><strong>Inventory overview</strong><p id="dashboard-summary">Loading balances…</p><ul id="low-stock"></ul></aside>
     <section aria-labelledby="sync-heading"><h2 id="sync-heading">Connection &amp; pending entries</h2><p id="sync-status" role="status">Checking connection…</p><button id="sync-now" type="button" class="secondary">Sync now</button><details><summary>Connect another device</summary><p id="connection-address"></p><p id="connection-help"></p><img id="connection-qr" src="/api/connection/qr.svg" width="222" height="222" alt="QR code for this server address"></details><ul id="sync-queue"></ul><details data-permission="correct"><summary>Review held server entries</summary><button id="server-holds-refresh" type="button" class="secondary">Load held entries</button><ul id="server-holds"></ul></details></section>
+    </div>
+    <div data-screen="products" hidden>
     <section class="category-section" aria-labelledby="categories-heading">
       <h2 id="categories-heading">Your categories</h2>
       <p>Choose a category to see its products.</p>
       <div id="category-buttons" class="category-buttons" role="group" aria-label="Filter products by category"></div>
-    </section>
-    <section id="bulk-section" class="workspace-section" aria-labelledby="bulk-heading">
-      <h2 id="bulk-heading">Daily bulk entry</h2><p>Enter quantities for several products. Blank rows are skipped. Drafts save automatically; stock changes only when you finalize.</p>
-      <form id="bulk-form"><div class="form-grid">
-        <div><label for="bulk-category">Category</label><select id="bulk-category"></select></div>
-        <div><label for="bulk-kind">Entry type</label><select id="bulk-kind"><option value="receive">Receive</option><option value="issue">Issue</option><option value="opening">Opening stock</option></select></div>
-        <div><label for="bulk-date">Stock date</label><input id="bulk-date" type="date" required></div>
-        <div><label for="bulk-search">Find a product</label><input id="bulk-search" type="search"></div>
-      </div><label for="bulk-notes">General notes</label><input id="bulk-notes" maxlength="300"><div id="bulk-rows"></div>
-      <p id="draft-status" role="status"></p><button type="submit">Finalize bulk entry</button> <button id="new-draft" type="button" class="secondary">Start another draft</button></form>
-      <details><summary>Saved drafts</summary><ul id="draft-list"></ul></details>
     </section>
     <div class="layout">
       <section aria-labelledby="add-heading">
@@ -82,15 +74,34 @@
         <ul id="products" aria-label="Saved products"></ul>
       </section>
     </div>
+    </div>
+    <div data-screen="entry" hidden>
+    <section id="bulk-section" class="workspace-section" aria-labelledby="bulk-heading">
+      <h2 id="bulk-heading">Daily bulk entry</h2><p>Enter quantities for several products. Blank rows are skipped. Set opening balances under Products → Stock details. Drafts save automatically; stock changes only when you finalize.</p>
+      <form id="bulk-form"><div class="form-grid">
+        <div><label for="bulk-category">Category</label><select id="bulk-category"></select></div>
+        <div><label for="bulk-kind">Entry type</label><select id="bulk-kind"><option value="receive">Receive</option><option value="issue">Issue</option></select></div>
+        <div><label for="bulk-date">Stock date</label><input id="bulk-date" type="date" required></div>
+        <div><label for="bulk-search">Find a product</label><input id="bulk-search" type="search"></div>
+      </div><label for="bulk-notes">General notes</label><input id="bulk-notes" maxlength="300"><div id="bulk-rows"></div>
+      <p id="draft-status" role="status"></p><button type="submit">Finalize bulk entry</button> <button id="new-draft" type="button" class="secondary">Start another draft</button></form>
+      <details><summary>Saved drafts</summary><ul id="draft-list"></ul></details>
+    </section>
+    </div>
+    <div data-screen="history" hidden>
     <section id="activity-section" class="workspace-section" aria-labelledby="activity-heading"><h2 id="activity-heading">Inventory activity</h2>
       <div class="form-grid"><div><label for="activity-from">From date</label><input id="activity-from" type="date"></div><div><label for="activity-to">To date</label><input id="activity-to" type="date"></div><div><label for="activity-search">Product search</label><input id="activity-search" type="search"></div><div><label for="activity-view">View</label><select id="activity-view"><option value="transactions">Separate transactions</option><option value="daily">Daily totals</option></select></div></div>
       <button id="activity-refresh" type="button" class="secondary">Show activity</button><div id="activity-results" class="table-scroll"></div>
     </section>
     <section id="monthly-section" class="workspace-section" aria-labelledby="monthly-heading"><h2 id="monthly-heading">Monthly inventory table</h2><p>Received and issued quantities appear side by side. Select a daily quantity to review its transactions or change the daily total with recorded corrections.</p><div class="form-grid"><div><label for="monthly-period">Month &amp; year</label><input id="monthly-period" type="month"></div><div><label for="monthly-category">Category</label><select id="monthly-category"></select></div></div><button id="monthly-refresh" type="button" class="secondary">Show month</button><div id="monthly-grid" class="table-scroll"></div><div id="monthly-editor"></div></section>
+    </div>
+    <div data-screen="reports" hidden>
     <section id="reports-section" class="workspace-section" aria-labelledby="reports-heading"><h2 id="reports-heading">Excel reports</h2><p>Preview and save a report version, then download its Excel workbook. Friday reports are cumulative from month start.</p>
       <form id="report-form"><div class="form-grid"><div><label for="report-kind">Report type</label><select id="report-kind"><option value="custom">Custom date range</option><option value="friday">Cumulative Friday</option><option value="monthly">Full month</option></select></div><div><label for="report-from">From</label><input id="report-from" type="date" required></div><div><label for="report-to">To / selected month</label><input id="report-to" type="date" required></div></div>
       <label for="report-name">Report title</label><input id="report-name" value="Inventory report" required maxlength="120"><label class="check"><input id="report-zero" type="checkbox" checked> Exclude products with zero opening, receiving, issuing and closing</label><details><summary>Select specific products (leave all unchecked for all products)</summary><div id="report-items"></div></details><button>Preview &amp; save report</button></form><div id="report-preview" class="table-scroll"></div><ul id="report-history"></ul>
     </section>
+    </div>
+    <div data-screen="settings" hidden>
     <section id="admin-section" class="workspace-section" aria-labelledby="admin-heading"><h2 id="admin-heading">Administration</h2>
       <details data-permission="products">
         <summary>Import dated stock history</summary>
@@ -128,7 +139,7 @@
       </details>
       <details><summary>Optional app PIN lock</summary><p>Locks this device's app screen after five minutes of inactivity. Offline data remains in browser storage; the PIN is not storage encryption.</p><label for="new-pin">New PIN (4–12 digits)</label><input id="new-pin" type="password" inputmode="numeric" minlength="4" maxlength="12"><button id="pin-save" type="button">Set PIN</button> <button id="pin-lock" type="button" class="secondary">Lock now</button><label for="pin-account-password">Account password (to remove PIN)</label><input id="pin-account-password" type="password" autocomplete="current-password"><button id="pin-remove" type="button" class="secondary">Verify password &amp; remove PIN</button></details>
       <details data-permission="products"><summary>Manage categories</summary><form id="category-create-form"><label for="new-category-name">New category name</label><input id="new-category-name" required maxlength="120"><button>Add category</button></form><ul id="category-management"></ul></details>
-      <details data-permission="products"><summary>Import Excel / CSV products</summary><p>Preview first. Choose Link, Skip or Create for matches. Linked products keep their existing stock; a verified backup is made before applying.</p><form id="import-preview-form"><label for="import-file">Excel workbook or UTF-8 CSV</label><input id="import-file" type="file" accept=".xlsx,.csv" required><label for="import-category">Destination category</label><select id="import-category"></select><label for="import-sheet">Worksheet number (first sheet is 1)</label><input id="import-sheet" type="number" min="1" value="1"><label for="import-header">Header row number</label><input id="import-header" type="number" min="1" value="1"><label for="import-date">Opening stock date</label><input id="import-date" type="date" required><button>Preview import</button></form><form id="import-apply-form" hidden><div id="import-preview" class="table-scroll"></div><button>Apply reviewed choices</button></form></details>
+      <details data-permission="products"><summary>Import Excel / CSV products</summary><p>Preview first. Choose Link, Skip or Create for matches. Linked products keep their existing stock; a verified backup is made before applying.</p><form id="import-preview-form"><label for="import-file">Excel workbook or UTF-8 CSV</label><input id="import-file" type="file" accept=".xlsx,.csv" required><label for="import-category">Destination category</label><select id="import-category"></select><label for="import-sheet">Worksheet number (first sheet is 1)</label><input id="import-sheet" type="number" min="1" value="1"><label for="import-header">Header row number</label><input id="import-header" type="number" min="1" value="1"><label for="import-date">Opening stock date</label><input id="import-date" type="date" required><button>Preview import</button><p id="import-feedback" role="status"></p></form><form id="import-apply-form" hidden><div id="import-preview" class="table-scroll"></div><button>Apply reviewed choices</button></form></details>
       <details data-permission="products"><summary>Manage product details &amp; alerts</summary><label for="manage-product">Product</label><select id="manage-product"></select><form id="manage-form"><label for="manage-name">Product name</label><input id="manage-name" required maxlength="120"><label for="manage-code">Optional product code</label><input id="manage-code" maxlength="80"><label for="manage-notes">Product notes</label><textarea id="manage-notes" maxlength="1000"></textarea><label for="manage-packing">Packing</label><input id="manage-packing" maxlength="1000"><label for="manage-specification">Specification</label><input id="manage-specification" maxlength="1000"><div id="custom-fields"></div><button id="custom-field-add" type="button" class="secondary">Add another custom field</button><label for="manage-low">Low-stock alert quantity (blank disables)</label><input id="manage-low" inputmode="decimal"><label for="manage-order">Display order</label><input id="manage-order" type="number" step="1" value="0"><label class="check"><input id="manage-archived" type="checkbox"> Archived (retain all history)</label><button>Save product details</button> <button id="safe-delete-product" type="button" class="secondary">Delete unused product</button></form></details>
       <details data-permission="reports"><summary>Company Excel templates</summary><p>Upload your report workbook and map every worksheet's product range. Existing styles, merges and other workbook parts are retained. Review your actual company's output before use.</p><form id="template-inspect-form"><label for="template-file">Company report workbook (.xlsx)</label><input id="template-file" type="file" accept=".xlsx" required><button>Read worksheets</button></form><div id="template-sample" class="table-scroll"></div><form id="template-save-form" hidden><label for="template-name">Template name</label><input id="template-name" required maxlength="120"><div id="template-mapping"></div><button>Save mapped template</button></form><ul id="template-list"></ul></details>
       <details data-permission="users"><summary>Employees &amp; permissions</summary><form id="employee-form"><label for="employee-name">Username</label><input id="employee-name" required maxlength="80"><label for="employee-password">Initial password (12+ characters)</label><input id="employee-password" type="password" minlength="12" maxlength="200" required><fieldset id="employee-permissions"><legend>Permissions</legend></fieldset><button>Create employee</button></form><ul id="employee-list"></ul></details>
@@ -136,10 +147,11 @@
       <details data-permission="backups"><summary>Backups</summary><p id="backup-status"></p><button id="backup-create" type="button">Create verified backup</button><ul id="backup-list"></ul><p>Restore is provided through the offline maintenance tool so running servers cannot overwrite restored data.</p></details>
       <details data-permission="settings"><summary>Company settings &amp; month closing</summary><form id="settings-form"><label for="company-name">Company name</label><input id="company-name" maxlength="120"><label for="company-offset">Company clock offset from UTC, in minutes (Riyadh = 180)</label><input id="company-offset" type="number" min="-720" max="840" step="15" value="180"><p class="hint">Fixed offsets do not automatically follow daylight-saving changes.</p><label for="company-date-format">Date display</label><select id="company-date-format"><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option></select><label for="company-time-format">Time display</label><select id="company-time-format"><option value="24h">24 hour</option><option value="12h">12 hour</option></select><label for="backup-locations">Extra backup folders (one full path per line)</label><textarea id="backup-locations" rows="3"></textarea><button>Save settings</button></form><label for="closing-month">Month</label><input id="closing-month" type="month"><button id="close-month" type="button" class="secondary">Close month</button> <button id="open-month" type="button" class="secondary">Reopen month</button><ul id="closed-months"></ul></details>
     </section>
+    </div>
     <!-- Present in the initial DOM so assistive technology can announce updates. -->
     <p id="status" role="status" aria-live="polite" aria-atomic="true"></p>
     <noscript><p>JavaScript is required to save and display products. Enable it and reload this page.</p></noscript>
   </main>
-  <footer>Stored locally in SQLite · Your local account · No subscription</footer>
+  <footer>Inventory workspace · No subscription</footer>
 </body>
 </html>

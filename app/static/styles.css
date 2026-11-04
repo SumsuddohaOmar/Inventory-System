@@ -66,3 +66,29 @@ li span { display: block; color: #475f53; }
 .skip { position: absolute; top: -100px; background: white; padding: 12px; color: #17543e; }
 .skip:focus { top: 4px; }
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } header, main, footer { padding: 18px; } }
+
+/* Keep the six destinations within thumb reach, including Android safe areas. */
+.screen-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: #fff; border-top: 1px solid #adb9c7; padding-bottom: env(safe-area-inset-bottom); }
+.screen-nav a { min-height: 52px; display: grid; place-items: center; padding: 2px; color: #164367; font-size: clamp(.66rem, 3vw, .95rem); text-decoration: none; }
+.screen-nav a[aria-current="page"] { background: #dcecf9; font-weight: bold; }
+body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+[data-screen][hidden] { display: none; }
+.stock-error { color: #a02222; }
+/* Let nested forms shrink to the screen. Wide reports scroll in their own box. */
+body { overflow-wrap: anywhere; }
+input, select, textarea, button, fieldset, img { max-width: 100%; }
+input, select, textarea, fieldset { min-width: 0; }
+.layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+.form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
+.bulk-row { grid-template-columns: minmax(0, 1fr) minmax(90px, 150px); }
+.screen-nav { margin: 0; }
+.screen-nav a { overflow-wrap: normal; }
+
+@media (max-width: 720px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  header, main, footer, section { padding: 14px; }
+}
+
+@media (max-width: 360px) {
+  .bulk-row { grid-template-columns: minmax(0, 1fr); }
+}

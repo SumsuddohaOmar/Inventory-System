@@ -162,7 +162,7 @@ def save_entry(path: Path, product_id: str, entry: dict, connection=None) -> dic
             "INSERT INTO stock_entries (id, product_id, kind, effective_date, quantity_minor, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (entry["id"], product_id, entry["kind"], entry["effective_date"], amount, entry["notes"], datetime.now(timezone.utc).isoformat()),
         )
-        validate_timeline(connection, product_id)
+        validate_timeline(connection, product_id, (amount, precision) if entry["kind"] == "issue" else None)
         # Raising above rolls back the insertion as part of connect's transaction.
         row = connection.execute("SELECT * FROM stock_entries WHERE id = ?", (entry["id"],)).fetchone()
         result = public_entry(row, precision)
@@ -171,7 +171,7 @@ def save_entry(path: Path, product_id: str, entry: dict, connection=None) -> dic
         return result
 
 
-def validate_timeline(connection, product_id):
+def validate_timeline(connection, product_id, proposed_issue=None):
     """Validate the entire active daily timeline after a proposed write/correction."""
     rows = connection.execute("SELECT * FROM stock_entries WHERE product_id=? AND voided=0 ORDER BY effective_date", (product_id,)).fetchall()
     opening = next((row for row in rows if row["kind"] == "opening"), None)
@@ -184,5 +184,10 @@ def validate_timeline(connection, product_id):
     balance = 0
     for day, change in days.items():
         balance += change
-        if balance < 0: raise StockError(f"Not enough stock on {day}. This change would make the balance negative.")
+        if balance < 0:
+            if proposed_issue:
+                amount, precision = proposed_issue
+                # Add the rejected issue back to show the balance on the limiting date.
+                raise StockError(f"Not enough stock on {day}. Available: {display(balance + amount, precision)}.")
+            raise StockError(f"Not enough stock on {day}. This change would make the balance negative.")
         if balance > MAX_MINOR: raise StockError("This change exceeds the supported stock balance.")

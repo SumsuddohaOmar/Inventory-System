@@ -20,8 +20,8 @@ paid upgrades off.
    the phone test on Wi-Fi and mobile data.
 
 PostgreSQL integration and the live service have not yet been verified.
-Imports requiring backup snapshots and local backup endpoints are unavailable
-in PostgreSQL mode. Separate deployments are required for separate businesses.
+Product import preview is read-only and can run in PostgreSQL mode. Import
+apply, historical imports and in-app backups remain unavailable in cloud mode. Separate deployments are required for separate businesses.
 
 ## Container alternative
 
@@ -45,3 +45,30 @@ link on Wi-Fi and mobile data, then test an offline entry and reconnect.
 Each pilot deployment has its own database. Shared business workspaces,
 PostgreSQL, deployment, and live inventory migration are pending. Keep real
 inventory out of pilot volumes and deploy artifacts.
+
+
+## Cloud recovery drill before real data
+
+Use only fictional pilot records and a separate empty PostgreSQL target. If
+you cannot provision a disposable target within the free allowance, stop the
+drill without changing the live database.
+
+1. Record expected products, balances, ledger rows, employees and permissions,
+   reports, and settings. Save a custom-format dump with PostgreSQL client tools
+   using the direct TLS connection: `pg_dump --format=custom --file=pilot.dump`.
+   Set the source connection through PostgreSQL client configuration. Keep the
+   dump and connection secrets outside Git and any shared folder.
+2. Inspect the archive with `pg_restore --list pilot.dump`. Configure the client
+   for the empty disposable target and confirm its host and database name before
+   running `pg_restore --exit-on-error --single-transaction --no-owner
+   --no-privileges --dbname=RESTORE_DATABASE pilot.dump`. Use a client version
+   compatible with both servers. Never use the production database as the target.
+3. Point a separate test app at the restored target. Check owner and employee
+   sign-in, permissions, balances, ledger history, reports and settings. Test a
+   receive, an issue and an identical sync retry. Compare the expected records
+   before the test writes. Keep the dump outside Render's runtime filesystem.
+4. Record the dump time, recovery time, and comparison results. Do not migrate
+   real inventory until the drill passes and there is a documented repeatable
+   backup schedule. The Excel reports are exports, not recovery copies.
+
+This is a drill procedure; it does not indicate that cloud restore has passed.
