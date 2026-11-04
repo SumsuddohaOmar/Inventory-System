@@ -245,7 +245,7 @@ byId("safe-delete-product").addEventListener("click", async () => {
   const permanent = Boolean(currentUser?.admin);
   const productName = select.selectedOptions[0].textContent;
   const message = permanent
-    ? `Permanently delete "${productName}" and all its stock entries? This cannot be undone.`
+    ? `Permanently delete "${productName}" and all its stock entries? This also removes this product from open server drafts. Other products in those drafts are kept. This cannot be undone.`
     : `Delete unused product "${productName}"?`;
   if (!window.confirm(message)) return;
   const button = byId("safe-delete-product");

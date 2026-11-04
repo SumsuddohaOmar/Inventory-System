@@ -314,11 +314,19 @@ def register(application, path):
             # Finalized drafts and report versions are historical snapshots.
             # Keep them intact while allowing administrators to remove live stock.
             if permanent:
-                used = connection.execute(
-                    "SELECT 1 FROM drafts WHERE finalized=0 AND payload_json LIKE ?", (reference,)
-                ).fetchone()
-                if used:
-                    raise stock.StockError("An open draft references this product. Resolve the draft or archive the product.")
+                drafts = connection.execute(
+                    "SELECT id,payload_json FROM drafts WHERE finalized=0 AND payload_json LIKE ?", (reference,)
+                ).fetchall()
+                for draft in drafts:
+                    entries = json.loads(draft["payload_json"])
+                    remaining = [entry for entry in entries if entry.get("product_id") != product_id]
+                    if len(remaining) == len(entries):
+                        continue
+                    # Bump the revision so a tab with the old draft cannot overwrite this edit.
+                    connection.execute(
+                        "UPDATE drafts SET payload_json=?,revision=revision+1 WHERE id=?",
+                        (json.dumps(remaining), draft["id"]),
+                    )
             else:
                 used = connection.execute(
                     "SELECT 1 FROM drafts WHERE payload_json LIKE ? "

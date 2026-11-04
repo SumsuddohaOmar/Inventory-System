@@ -62,19 +62,17 @@ class WorkflowTests(unittest.TestCase):
         with database.connect(self.path) as connection:
             connection.execute(
                 "INSERT INTO drafts VALUES (?, ?, ?, 1, 0, ?)",
-                (draft_id, "test", json.dumps([{"product_id": str(identity)}]), "2026-11-02"),
+                (draft_id, "test", json.dumps([{"product_id": str(identity)}, {"product_id": "other"}]), "2026-11-02"),
             )
-        with self.assertRaisesRegex(stock.StockError, "open draft"):
-            delete(identity, request, permanent=True)
-        with database.connect(self.path) as connection:
-            connection.execute("UPDATE drafts SET finalized=1 WHERE id=?", (draft_id,))
         self.assertEqual(delete(identity, request, permanent=True), {"deleted": True})
         with database.connect(self.path) as connection:
             self.assertIsNone(connection.execute("SELECT 1 FROM products WHERE id=?", (str(identity),)).fetchone())
             self.assertIsNone(connection.execute("SELECT 1 FROM stock_entries WHERE product_id=?", (str(identity),)).fetchone())
             event = connection.execute("SELECT 1 FROM audit_events WHERE action='product.permanently_deleted'").fetchone()
             self.assertIsNotNone(event)
-            self.assertIsNotNone(connection.execute("SELECT 1 FROM drafts WHERE id=?", (draft_id,)).fetchone())
+            draft = connection.execute("SELECT payload_json,revision FROM drafts WHERE id=?", (draft_id,)).fetchone()
+            self.assertEqual(json.loads(draft["payload_json"]), [{"product_id": "other"}])
+            self.assertEqual(draft["revision"], 2)
 
     def test_correction_preserves_before_after_and_detects_stale_revision(self):
         opening=self.opening()
