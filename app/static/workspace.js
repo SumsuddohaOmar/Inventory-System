@@ -273,7 +273,28 @@ async function listEmployees(){byId("employee-list").replaceChildren();for(const
   const label=element("label",undefined,form);label.className="check";const active=element("input",undefined,label);active.type="checkbox";active.checked=user.active;label.append(document.createTextNode("Account active"));element("button","Save permissions",form);
   form.addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/users/${user.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({permissions:checks.filter(input=>input.checked).map(input=>input.value),active:active.checked})});await listEmployees();status.textContent="Permissions updated. Server checks apply immediately.";}catch(error){status.textContent=error.message;}});
 }}
-byId("audit-refresh").addEventListener("click",async()=>{try{byId("audit-list").replaceChildren();for(const row of await request("/api/audit")){const item=element("li",`${row.created_at} · ${row.action} · actor ${row.actor}`,byId("audit-list"));const detail=element("details",undefined,item);element("summary","Before & after",detail);element("pre",`${row.before_json||"—"}\n→\n${row.after_json||"—"}`,detail);}}catch(error){status.textContent=error.message;}});
+byId("audit-refresh").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const feedback = byId("audit-status");
+  const list = byId("audit-list");
+  button.disabled = true;
+  feedback.textContent = "Loading audit history…";
+  try {
+    const rows = await request("/api/audit");
+    list.replaceChildren();
+    for (const row of rows) {
+      const item = element("li", `${row.created_at} · ${row.action} · actor ${row.actor}`, list);
+      const detail = element("details", undefined, item);
+      element("summary", "Before & after", detail);
+      element("pre", `${row.before_json || "—"}\n→\n${row.after_json || "—"}`, detail);
+    }
+    feedback.textContent = rows.length ? "" : "No audit events yet.";
+  } catch (error) {
+    feedback.textContent = `Could not refresh audit history. ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+});
 async function listBackups(){byId("backup-list").replaceChildren();for(const row of await request("/api/backups"))element("li",`${row.name} · ${row.size} bytes`,byId("backup-list"));}
 byId("backup-create").addEventListener("click",async()=>{try{await request("/api/backups",{method:"POST"});await listBackups();status.textContent="Verified backup created.";}catch(error){status.textContent=error.message;}});
 async function loadSettings(){const settings=await request("/api/settings");byId("company-name").value=settings.company_name||"";byId("company-offset").value=settings.utc_offset_minutes??180;byId("company-date-format").value=settings.date_format||"YYYY-MM-DD";byId("company-time-format").value=settings.time_format||"24h";byId("backup-locations").value=(settings.backup_locations||[]).join("\n");byId("backup-status").textContent=settings.backup_status||"Automatic backup check pending.";byId("closed-months").replaceChildren();for(const month of await request("/api/months"))element("li",`${month.month} · Closed`,byId("closed-months"));}

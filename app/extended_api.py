@@ -264,8 +264,18 @@ def register(application, path):
 
     @application.get("/api/audit")
     def history(limit: int = 100, entity_id: str | None = None):
+        limit = min(max(limit, 1), 500)
         with database.connect(path) as connection:
-            rows = connection.execute("SELECT * FROM audit_events WHERE (? IS NULL OR entity_id=?) ORDER BY created_at DESC LIMIT ?", (entity_id, entity_id, min(max(limit, 1), 500))).fetchall()
+            # PostgreSQL cannot infer the type of a parameter used only in IS NULL.
+            if entity_id is None:
+                rows = connection.execute(
+                    "SELECT * FROM audit_events ORDER BY created_at DESC LIMIT ?", (limit,)
+                )
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM audit_events WHERE entity_id=? ORDER BY created_at DESC LIMIT ?",
+                    (entity_id, limit),
+                )
             return [dict(row) for row in rows]
 
     @application.get("/api/catalog")
