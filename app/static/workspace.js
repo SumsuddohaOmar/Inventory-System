@@ -249,15 +249,17 @@ byId("safe-delete-product").addEventListener("click", async () => {
     : `Delete unused product "${productName}"?`;
   if (!window.confirm(message)) return;
   const button = byId("safe-delete-product");
+  const feedback = byId("product-delete-status");
   button.disabled = true;
+  feedback.textContent = "Deleting product…";
   try {
     const query = permanent ? "?permanent=true" : "";
     await request(`/api/catalog/${encodeURIComponent(select.value)}${query}`, {method: "DELETE"});
     await loadWorkspace();
     await loadProducts();
-    status.textContent = "Product deleted. The deletion is recorded in audit history.";
+    feedback.textContent = "Product deleted. The deletion is recorded in audit history.";
   } catch (error) {
-    status.textContent = error.message;
+    feedback.textContent = error.message;
   } finally {
     button.disabled = false;
   }

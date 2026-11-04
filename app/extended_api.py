@@ -311,13 +311,22 @@ def register(application, path):
             if not row:
                 raise HTTPException(404, "Product not found.")
             reference = f"%{product_id}%"
-            used = connection.execute(
-                "SELECT 1 FROM drafts WHERE payload_json LIKE ? "
-                "UNION ALL SELECT 1 FROM report_versions WHERE payload_json LIKE ? LIMIT 1",
-                (reference, reference),
-            ).fetchone()
-            if used:
-                raise stock.StockError("This product is referenced by a saved draft or report. Archive it instead.")
+            # Finalized drafts and report versions are historical snapshots.
+            # Keep them intact while allowing administrators to remove live stock.
+            if permanent:
+                used = connection.execute(
+                    "SELECT 1 FROM drafts WHERE finalized=0 AND payload_json LIKE ?", (reference,)
+                ).fetchone()
+                if used:
+                    raise stock.StockError("An open draft references this product. Resolve the draft or archive the product.")
+            else:
+                used = connection.execute(
+                    "SELECT 1 FROM drafts WHERE payload_json LIKE ? "
+                    "UNION ALL SELECT 1 FROM report_versions WHERE payload_json LIKE ? LIMIT 1",
+                    (reference, reference),
+                ).fetchone()
+                if used:
+                    raise stock.StockError("This product is referenced by a saved draft or report. Archive it instead.")
             if permanent:
                 # Remove movements before the product to satisfy the ledger's foreign key.
                 # The deletion and its audit record commit together.
