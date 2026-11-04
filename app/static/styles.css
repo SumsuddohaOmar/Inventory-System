@@ -47,10 +47,9 @@ th { background: #e4eee6; }
 }
 #monthly-grid tr > :nth-child(2),
 #monthly-grid tr > :last-child {
-  max-width: 82px;
   padding-inline: 6px;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow-wrap: normal;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
