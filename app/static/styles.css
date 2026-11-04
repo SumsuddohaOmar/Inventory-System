@@ -68,10 +68,12 @@ li span { display: block; color: #475f53; }
 @media (max-width: 720px) { .layout { grid-template-columns: 1fr; } header, main, footer { padding: 18px; } }
 
 /* Keep the six destinations within thumb reach, including Android safe areas. */
-.screen-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: #fff; border-top: 1px solid #adb9c7; padding-bottom: env(safe-area-inset-bottom); }
-.screen-nav a { min-height: 52px; display: grid; place-items: center; padding: 2px; color: #164367; font-size: clamp(.66rem, 3vw, .95rem); text-decoration: none; }
-.screen-nav a[aria-current="page"] { background: #dcecf9; font-weight: bold; }
-body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+.screen-nav { position: fixed; z-index: 10; inset: auto 0 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); background: #123c31; border-top: 2px solid #43866e; box-shadow: 0 -4px 16px #18332d40; padding: 4px 0 calc(4px + env(safe-area-inset-bottom)); }
+.screen-nav a { min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; margin: 0 1px; padding: 3px 0; border: 1px solid transparent; border-radius: 8px; color: #fff; font-size: clamp(.625rem, 2.8vw, .875rem); font-weight: 650; line-height: 1.2; text-decoration: none; }
+.screen-nav svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.screen-nav a[aria-current="page"] { background: #d8f4e6; border-color: #a8dcc3; color: #123c31; font-weight: 750; }
+.screen-nav a:focus-visible { outline: 2px solid #ffd875; outline-offset: -3px; }
+body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 [data-screen][hidden] { display: none; }
 .stock-error { color: #a02222; }
 /* Let nested forms shrink to the screen. Wide reports scroll in their own box. */

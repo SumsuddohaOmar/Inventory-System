@@ -29,7 +29,14 @@
   </section>
   <section id="pin-panel" hidden aria-labelledby="pin-title"><h2 id="pin-title">Unlock saved inventory</h2><p>This PIN locks the app screen. It does not encrypt browser storage or replace device security.</p><form id="pin-unlock-form"><label for="unlock-pin">App PIN</label><input id="unlock-pin" type="password" inputmode="numeric" required autocomplete="off"><button>Unlock</button></form><button id="pin-use-password" type="button" class="secondary">Sign in with account password instead</button><p id="pin-error" role="alert"></p></section>
   <main id="main" hidden>
-<nav class="screen-nav" aria-label="Inventory workspace"><a href="#dashboard">Dashboard</a><a href="#products">Products</a><a href="#entry">Entry</a><a href="#history">History</a><a href="#reports">Reports</a><a href="#settings">Settings</a></nav>
+    <nav class="screen-nav" aria-label="Inventory workspace">
+      <a href="#dashboard"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 10l9-7 9 7v10H3z M9 20v-7h6v7"/></svg><span>Dashboard</span></a>
+      <a href="#products"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10"/></svg><span>Products</span></a>
+      <a href="#entry"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16v16H4z M12 8v8 M8 12h8"/></svg><span>Entry</span></a>
+      <a href="#history"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10a8 8 0 1 1 1 7 M4 5v5h5 M12 8v5l3 2"/></svg><span>History</span></a>
+      <a href="#reports"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h16 M6 16v-4 M12 16V5 M18 16V9"/></svg><span>Reports</span></a>
+      <a href="#settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16 M4 12h16 M4 18h16 M8 4v4 M16 10v4 M10 16v4"/></svg><span>Settings</span></a>
+    </nav>
     <div data-screen="dashboard">
     <aside id="dashboard"><strong>Inventory overview</strong><p id="dashboard-summary">Loading balances…</p><ul id="low-stock"></ul></aside>
     <section aria-labelledby="sync-heading"><h2 id="sync-heading">Connection &amp; pending entries</h2><p id="sync-status" role="status">Checking connection…</p><button id="sync-now" type="button" class="secondary">Sync now</button><details><summary>Connect another device</summary><p id="connection-address"></p><p id="connection-help"></p><img id="connection-qr" src="/api/connection/qr.svg" width="222" height="222" alt="QR code for this server address"></details><ul id="sync-queue"></ul><details data-permission="correct"><summary>Review held server entries</summary><button id="server-holds-refresh" type="button" class="secondary">Load held entries</button><ul id="server-holds"></ul></details></section>
