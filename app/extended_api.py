@@ -269,11 +269,11 @@ def register(application, path):
             # PostgreSQL cannot infer the type of a parameter used only in IS NULL.
             if entity_id is None:
                 rows = connection.execute(
-                    "SELECT * FROM audit_events ORDER BY created_at DESC LIMIT ?", (limit,)
+                    "SELECT a.*, u.username AS actor_name FROM audit_events a LEFT JOIN users u ON u.id=a.actor ORDER BY a.created_at DESC LIMIT ?", (limit,)
                 )
             else:
                 rows = connection.execute(
-                    "SELECT * FROM audit_events WHERE entity_id=? ORDER BY created_at DESC LIMIT ?",
+                    "SELECT a.*, u.username AS actor_name FROM audit_events a LEFT JOIN users u ON u.id=a.actor WHERE a.entity_id=? ORDER BY a.created_at DESC LIMIT ?",
                     (entity_id, limit),
                 )
             return [dict(row) for row in rows]

@@ -273,6 +273,32 @@ async function listEmployees(){byId("employee-list").replaceChildren();for(const
   const label=element("label",undefined,form);label.className="check";const active=element("input",undefined,label);active.type="checkbox";active.checked=user.active;label.append(document.createTextNode("Account active"));element("button","Save permissions",form);
   form.addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/users/${user.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({permissions:checks.filter(input=>input.checked).map(input=>input.value),active:active.checked})});await listEmployees();status.textContent="Permissions updated. Server checks apply immediately.";}catch(error){status.textContent=error.message;}});
 }}
+// Old events store JSON snapshots; display their values without interpreting them as HTML.
+function auditSnapshot(value) {
+  try { return value ? JSON.parse(value) : null; }
+  catch { return value; }
+}
+
+function showAuditSnapshot(label, snapshot, parent) {
+  element("h4", label, parent);
+  if (snapshot === null) {
+    element("p", "No record", parent);
+  } else if (typeof snapshot !== "object") {
+    element("p", String(snapshot), parent);
+  } else {
+    const fields = element("dl", undefined, parent);
+    for (const [key, value] of Object.entries(snapshot)) {
+      if (value === null || value === "") continue;
+      const name = key.replaceAll("_", " ");
+      element("dt", name.charAt(0).toUpperCase() + name.slice(1), fields);
+      const shown = ["archived", "voided", "active"].includes(key) && [0, 1, true, false].includes(value)
+        ? (value ? "Yes" : "No")
+        : typeof value === "object" ? JSON.stringify(value) : String(value);
+      element("dd", shown, fields);
+    }
+  }
+}
+
 byId("audit-refresh").addEventListener("click", async (event) => {
   const button = event.currentTarget;
   const feedback = byId("audit-status");
@@ -283,10 +309,22 @@ byId("audit-refresh").addEventListener("click", async (event) => {
     const rows = await request("/api/audit");
     list.replaceChildren();
     for (const row of rows) {
-      const item = element("li", `${row.created_at} · ${row.action} · actor ${row.actor}`, list);
-      const detail = element("details", undefined, item);
-      element("summary", "Before & after", detail);
-      element("pre", `${row.before_json || "—"}\n→\n${row.after_json || "—"}`, detail);
+      const before = auditSnapshot(row.before_json);
+      const after = auditSnapshot(row.after_json);
+      const name = after?.name || before?.name || after?.username || before?.username;
+      const action = row.action.replaceAll(".", " ").replaceAll("_", " ");
+      const item = element("li", undefined, list);
+      element("strong", action.charAt(0).toUpperCase() + action.slice(1) + (name ? ` · ${name}` : ""), item);
+      const date = new Date(row.created_at);
+      const time = Number.isNaN(date.getTime()) ? row.created_at : date.toLocaleString();
+      const actor = row.actor_name || (row.actor === "local-owner" ? "Local owner" : row.actor);
+      element("p", `${time} · By ${actor}`, item);
+      if (before !== null || after !== null) {
+        const detail = element("details", undefined, item);
+        element("summary", "Before & after", detail);
+        showAuditSnapshot("Before", before, detail);
+        showAuditSnapshot("After", after, detail);
+      }
     }
     feedback.textContent = rows.length ? "" : "No audit events yet.";
   } catch (error) {
