@@ -383,13 +383,13 @@ function showMonth(){
   const period=byId("monthly-period").value;if(!period)return;
   const [year,month]=period.split("-").map(Number),days=new Date(year,month,0).getDate();
   const host=byId("monthly-grid");host.replaceChildren();const grid=element("table",undefined,host),thead=element("thead",undefined,grid),head=element("tr",undefined,thead);
-  for(const label of ["Product","Unit","Opening allocation",...Array.from({length:days},(_,index)=>[`${index+1} R`,`${index+1} I`]).flat(),"Available at month end"])element("th",label,head).scope="col";
+  for(const label of ["Product","Opening","Unit",...Array.from({length:days},(_,index)=>[`${index+1} R`,`${index+1} I`]).flat(),"Closing"])element("th",label,head).scope="col";
   const body=element("tbody",undefined,grid);
   for(const product of catalog.filter(row=>row.category_id===byId("monthly-category").value)){
     const entries=product.stock.entries.filter(entry=>!entry.voided),first=`${period}-01`,last=`${period}-${String(days).padStart(2,"0")}`;
     const opening=entries.filter(entry=>entry.effective_date<first||(entry.kind==="opening"&&entry.effective_date<=last)).reduce((sum,entry)=>sum+(entry.kind==="issue"?-minorValue(entry.quantity):minorValue(entry.quantity)),0n);
     const closing=entries.filter(entry=>entry.effective_date<=last).reduce((sum,entry)=>sum+(entry.kind==="issue"?-minorValue(entry.quantity):minorValue(entry.quantity)),0n);
-    const row=element("tr",undefined,body);element("th",product.name,row).scope="row";element("td",product.unit,row);element("td",minorText(opening,product.precision),row);
+    const row=element("tr",undefined,body);element("th",product.name,row).scope="row";element("td",minorText(opening,product.precision),row);element("td",product.unit,row);
     for(let day=1;day<=days;day++)for(const kind of ["receive","issue"]){const date=`${period}-${String(day).padStart(2,"0")}`,matching=entries.filter(entry=>entry.kind===kind&&entry.effective_date===date),total=matching.reduce((sum,entry)=>sum+minorValue(entry.quantity),0n);
       const cell=element("td",undefined,row),button=element("button",minorText(total,product.precision),cell);button.className="cell-button";button.type="button";button.setAttribute("aria-label",`${product.name}, ${date}, ${kind}, ${minorText(total,product.precision)} ${product.unit}`);
       button.addEventListener("click",()=>editDailyCell(product,date,kind,matching,total));}

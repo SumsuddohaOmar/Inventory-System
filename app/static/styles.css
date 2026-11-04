@@ -21,7 +21,39 @@ summary { cursor: pointer; min-height: 44px; padding: 8px 0; font-weight: 650; }
 table { width: 100%; border-collapse: collapse; }
 th,td { padding: 10px; text-align: left; border-bottom: 1px solid #d4dfd7; white-space: nowrap; }
 th { background: #e4eee6; }
-#monthly-grid th:first-child { position: sticky; left: 0; z-index: 1; }
+/* Keep the row label and opening balance on the left, and closing on the right. */
+#monthly-grid { --monthly-product-width: clamp(76px, 22vw, 160px); }
+#monthly-grid tr > :first-child,
+#monthly-grid tr > :nth-child(2),
+#monthly-grid tr > :last-child {
+  position: sticky;
+  z-index: 1;
+  background: #e4eee6;
+}
+#monthly-grid tr > :first-child {
+  left: 0;
+  min-width: var(--monthly-product-width);
+  max-width: var(--monthly-product-width);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#monthly-grid tr > :nth-child(2) {
+  left: var(--monthly-product-width);
+  border-right: 1px solid #9eb8a9;
+}
+#monthly-grid tr > :last-child {
+  right: 0;
+  border-left: 1px solid #9eb8a9;
+}
+#monthly-grid tr > :nth-child(2),
+#monthly-grid tr > :last-child {
+  max-width: 82px;
+  padding-inline: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .cell-button { background: white; color: #17543e; border: 0; padding: 6px; min-width: 60px; }
 fieldset { border: 1px solid #ccd8cf; margin: 16px 0; }
 header, main, footer { max-width: 1100px; margin: auto; padding: 24px; }
