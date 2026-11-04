@@ -10,11 +10,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 from xml.etree import ElementTree
 from zipfile import ZipFile
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from app import accounts, audit, backups, database, reports, stock, workflows
 from app.main import create_app
@@ -43,6 +43,27 @@ class WorkflowTests(unittest.TestCase):
 
     def change(self,row,quantity,**extra):
         return dict(id=str(uuid4()),expected_revision=row["revision"],effective_date=row["effective_date"],quantity=quantity,notes="Count correction",voided=False,**extra)
+
+    def test_only_administrator_can_permanently_delete_stock(self):
+        self.opening()
+        app = create_app(self.path)
+        delete = next(route.endpoint for route in app.routes
+                      if route.path == "/api/catalog/{identity}" and "DELETE" in route.methods)
+        request = Request({"type": "http"})
+        identity = UUID(self.product["id"])
+        request.state.user = {"admin": False}
+        with self.assertRaises(HTTPException) as denied:
+            delete(identity, request, permanent=True)
+        self.assertEqual(denied.exception.status_code, 403)
+        with self.assertRaises(stock.StockError):
+            delete(identity, request)
+        request.state.user = {"admin": True}
+        self.assertEqual(delete(identity, request, permanent=True), {"deleted": True})
+        with database.connect(self.path) as connection:
+            self.assertIsNone(connection.execute("SELECT 1 FROM products WHERE id=?", (str(identity),)).fetchone())
+            self.assertIsNone(connection.execute("SELECT 1 FROM stock_entries WHERE product_id=?", (str(identity),)).fetchone())
+            event = connection.execute("SELECT 1 FROM audit_events WHERE action='product.permanently_deleted'").fetchone()
+            self.assertIsNotNone(event)
 
     def test_correction_preserves_before_after_and_detects_stale_revision(self):
         opening=self.opening()

@@ -301,17 +301,33 @@ def register(application, path):
             return after
 
     @application.delete("/api/catalog/{identity}")
-    def safe_delete_product(identity: UUID):
+    def safe_delete_product(identity: UUID, request: Request, permanent: bool = False):
+        if permanent and not request.state.user["admin"]:
+            raise HTTPException(403, "Only an administrator can delete a product with stock history.")
+        product_id = str(identity)
         with database.connect(path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row=connection.execute("SELECT * FROM products WHERE id=?",(str(identity),)).fetchone()
-            if not row:raise HTTPException(404,"Product not found.")
-            used=connection.execute("SELECT 1 FROM stock_entries WHERE product_id=?",(str(identity),)).fetchone()
-            used=used or connection.execute("SELECT 1 FROM drafts WHERE payload_json LIKE ? UNION ALL SELECT 1 FROM report_versions WHERE payload_json LIKE ? LIMIT 1",(f'%{identity}%',f'%{identity}%')).fetchone()
-            if used:raise stock.StockError("This product has history or draft/report references. Archive it instead.")
-            audit.record(connection,"product.safely_deleted",str(identity),before=dict(row))
-            connection.execute("DELETE FROM products WHERE id=?",(str(identity),))
-            return {"deleted":True}
+            row = connection.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "Product not found.")
+            reference = f"%{product_id}%"
+            used = connection.execute(
+                "SELECT 1 FROM drafts WHERE payload_json LIKE ? "
+                "UNION ALL SELECT 1 FROM report_versions WHERE payload_json LIKE ? LIMIT 1",
+                (reference, reference),
+            ).fetchone()
+            if used:
+                raise stock.StockError("This product is referenced by a saved draft or report. Archive it instead.")
+            if permanent:
+                # Remove movements before the product to satisfy the ledger's foreign key.
+                # The deletion and its audit record commit together.
+                connection.execute("DELETE FROM stock_entries WHERE product_id=?", (product_id,))
+            elif connection.execute("SELECT 1 FROM stock_entries WHERE product_id=?", (product_id,)).fetchone():
+                raise stock.StockError("This product has stock history. Archive it or ask an administrator to delete it.")
+            action = "product.permanently_deleted" if permanent else "product.safely_deleted"
+            audit.record(connection, action, product_id, before=dict(row))
+            connection.execute("DELETE FROM products WHERE id=?", (product_id,))
+            return {"deleted": True}
 
     @application.get("/api/category-management")
     def all_categories():

@@ -35,6 +35,7 @@ function table(headers, rows, target) {
 }
 
 async function loadWorkspace() {
+  byId("safe-delete-product").textContent = currentUser?.admin ? "Delete product" : "Delete unused product";
   const preferences = request("/api/company").catch(()=>companyPreferences);
   byId("connection-address").textContent=location.origin;
   byId("connection-help").textContent=location.hostname==="127.0.0.1"||location.hostname==="localhost"?"This address works only on this computer. Configure local HTTPS before connecting Android; see docs/ANDROID.md.":"Use the same local Wi-Fi and install your own server's CA certificate before scanning. You can also type the address manually.";
@@ -238,7 +239,29 @@ byId("custom-field-add").addEventListener("click",()=>addCustomField());
 function showManagedProduct(){const product=catalog.find(row=>row.id===byId("manage-product").value);if(!product)return;byId("manage-name").value=product.name;byId("manage-code").value=product.code;byId("manage-notes").value=product.notes;byId("manage-order").value=product.sort_order;byId("manage-archived").checked=!!product.archived;byId("manage-low").value=product.low_stock_minor===null?"":(product.low_stock_minor/(10**product.precision)).toFixed(product.precision);const fields=JSON.parse(product.fields_json||"{}");byId("manage-packing").value=fields.Packing||"";byId("manage-specification").value=fields.Specification||"";byId("custom-fields").replaceChildren();customFieldControls=[];for(const [key,value]of Object.entries(fields))if(!["Packing","Specification"].includes(key))addCustomField(key,value);}
 byId("manage-product").addEventListener("change",showManagedProduct);
 byId("manage-form").addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/catalog/${byId("manage-product").value}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("manage-name").value,code:byId("manage-code").value,notes:byId("manage-notes").value,sort_order:Number(byId("manage-order").value),archived:byId("manage-archived").checked,low_stock:byId("manage-low").value,custom_fields:managedFields()})});await loadWorkspace();await loadProducts();status.textContent="Product details saved; history retained.";}catch(error){status.textContent=error.message;}});
-byId("safe-delete-product").addEventListener("click",async()=>{try{await request(`/api/catalog/${byId("manage-product").value}`,{method:"DELETE"});await loadWorkspace();await loadProducts();status.textContent="Unused product deleted; the action remains in audit history.";}catch(error){status.textContent=error.message;}});
+byId("safe-delete-product").addEventListener("click", async () => {
+  const select = byId("manage-product");
+  if (!select.value) return;
+  const permanent = Boolean(currentUser?.admin);
+  const productName = select.selectedOptions[0].textContent;
+  const message = permanent
+    ? `Permanently delete "${productName}" and all its stock entries? This cannot be undone.`
+    : `Delete unused product "${productName}"?`;
+  if (!window.confirm(message)) return;
+  const button = byId("safe-delete-product");
+  button.disabled = true;
+  try {
+    const query = permanent ? "?permanent=true" : "";
+    await request(`/api/catalog/${encodeURIComponent(select.value)}${query}`, {method: "DELETE"});
+    await loadWorkspace();
+    await loadProducts();
+    status.textContent = "Product deleted. The deletion is recorded in audit history.";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts"};
 for(const [permission,name]of Object.entries(permissionNames)){const label=element("label",undefined,byId("employee-permissions"));label.className="check";const input=element("input",undefined,label);input.type="checkbox";input.value=permission;input.checked=permission==="read";label.append(document.createTextNode(name));}
