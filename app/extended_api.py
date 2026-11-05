@@ -563,7 +563,8 @@ def register(application, path):
     def make_report(values: ReportInput):
         start, end = values.start.isoformat(), values.end.isoformat()
         if values.kind != "custom": start, end = reports.period(values.kind, end)
-        return reports.create(path, start, end, [str(identity) for identity in values.product_ids], values.exclude_zero, values.name)
+        return reports.create(path, start, end, [str(identity) for identity in values.product_ids], values.exclude_zero, values.name,
+                              layout="monthly-stock-v1" if values.kind == "monthly" else None)
 
     @application.get("/api/reports")
     def list_reports():

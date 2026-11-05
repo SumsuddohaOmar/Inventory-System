@@ -14,6 +14,7 @@
   <script src="/static/auth.js" defer></script>
   <script src="/static/stock.js" defer></script>
   <script src="/static/workspace.js" defer></script>
+  <script src="/static/report-layout.js" defer></script>
   <script src="/static/history-import.js" defer></script>
   <script src="/static/app.js" defer></script>
 </head>
@@ -104,7 +105,7 @@
     <section id="monthly-section" class="workspace-section" aria-labelledby="monthly-heading"><h2 id="monthly-heading">Monthly inventory table</h2><p>Received and issued quantities appear side by side. Select a daily quantity to review its transactions or change the daily total with recorded corrections.</p><div class="form-grid"><div><label for="monthly-period">Month &amp; year</label><input id="monthly-period" type="month"></div><div><label for="monthly-category">Category</label><select id="monthly-category"></select></div></div><button id="monthly-refresh" type="button" class="secondary">Show month</button><div id="monthly-grid" class="table-scroll"></div><div id="monthly-editor"></div></section>
     </div>
     <div data-screen="reports" hidden>
-    <section id="reports-section" class="workspace-section" aria-labelledby="reports-heading"><h2 id="reports-heading">Excel reports</h2><p>Preview and save a report version, then download its Excel workbook. Friday reports are cumulative from month start.</p>
+    <section id="reports-section" class="workspace-section" aria-labelledby="reports-heading"><h2 id="reports-heading">Excel reports</h2><p>Choose Full month for the monthly stock sheet. Open stock includes the previous closing and all receiving in the selected month. Preview and save a report version, then download its Excel workbook. Friday reports are cumulative from month start.</p>
       <form id="report-form"><div class="form-grid"><div><label for="report-kind">Report type</label><select id="report-kind"><option value="custom">Custom date range</option><option value="friday">Cumulative Friday</option><option value="monthly">Full month</option></select></div><div><label for="report-from">From</label><input id="report-from" type="date" required></div><div><label for="report-to">To / selected month</label><input id="report-to" type="date" required></div></div>
       <label for="report-name">Report title</label><input id="report-name" value="Inventory report" required maxlength="120"><label class="check"><input id="report-zero" type="checkbox" checked> Exclude products with zero opening, receiving, issuing and closing</label><details><summary>Select specific products (leave all unchecked for all products)</summary><div id="report-items"></div></details><button>Preview &amp; save report</button></form><div id="report-preview" class="table-scroll"></div><ul id="report-history"></ul>
     </section>

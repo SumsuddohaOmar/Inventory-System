@@ -135,6 +135,18 @@ They intercept all traffic and never contact the live inventory.
 
 ## Tests and learning
 
+New **Full month** reports use the monthly stock-sheet layout, with one section
+and Excel worksheet per category. Food includes Packing; cutlery includes item
+codes and Specification. In this layout, **Open stock = previous month's closing
++ all stock received in the selected month**. **Consumed** is that month's issued
+quantity, and **Available stock = Open stock - Consumed**. The true period opening
+and receipts remain separate in the saved snapshot for calculations and custom
+template mappings. This display never changes a product's opening ledger entry.
+Custom date-range, Friday and older saved reports keep their existing layouts.
+Phone previews use labeled product cards rather than squeezing the worksheet
+into a narrow screen. Optional Playwright layout checks run with
+`node tests/monthly-report-browser.cjs`.
+
 ```powershell
 .\.venv\Scripts\python.exe verify.py
 ```

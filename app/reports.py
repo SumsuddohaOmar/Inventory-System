@@ -36,7 +36,7 @@ def escape(value, entities=None):
     return _escape(xml_text(value), entities or {})
 
 
-def create(path, start, end, product_ids=(), exclude_zero=True, name="Inventory report"):
+def create(path, start, end, product_ids=(), exclude_zero=True, name="Inventory report", layout=None):
     """Snapshot period opening, received, issued and closing for selected products.
 
     Period opening is the ledger balance strictly BEFORE start. An opening entry
@@ -69,6 +69,14 @@ def create(path, start, end, product_ids=(), exclude_zero=True, name="Inventory 
         identity = str(uuid4())
         result = dict(id=identity, name=name, from_date=start, to_date=end, rows=rows,
                       created_at=datetime.now(timezone.utc).isoformat())
+        if layout == "monthly-stock-v1":
+            # Save the layout and company label WITH this immutable snapshot.
+            # Older/custom reports retain their original export format.
+            company = connection.execute("SELECT value_json FROM settings WHERE key='company_name'").fetchone()
+            result.update(layout=layout, company_name=json.loads(company[0]) if company else "Local Inventory")
+            from app.monthly_report import stock_sheet_opening
+            for row in rows:
+                row["stock_sheet_opening"] = stock_sheet_opening(row)
         connection.execute("INSERT INTO report_versions VALUES (?, ?, ?, ?, ?, ?)",
                            (identity, name, start, end, json.dumps(result), result["created_at"]))
         audit.record(connection, "report.saved", identity, after={"name": name, "from": start, "to": end})
@@ -90,6 +98,9 @@ def workbook(report) -> bytes:
     Standard library ZIP/XML keeps this release dependency-free. Category-specific
     company templates require separate mapping; this is the built-in report.
     """
+    if report.get("layout") == "monthly-stock-v1":
+        from app.monthly_report import workbook as monthly_workbook
+        return monthly_workbook(report)
     groups = {}
     for row in report["rows"]: groups.setdefault(row["category"], []).append(row)
     if not groups: groups["Inventory"] = []

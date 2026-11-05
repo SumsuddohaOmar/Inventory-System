@@ -254,7 +254,11 @@ byId("activity-refresh").addEventListener("click",async()=>{catalog=await reques
 byId("report-form").addEventListener("submit",async(event)=>{event.preventDefault();try{
   const report=await request("/api/reports",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({start:byId("report-from").value,end:byId("report-to").value,kind:byId("report-kind").value,name:byId("report-name").value,exclude_zero:byId("report-zero").checked,
     product_ids:[...byId("report-items").querySelectorAll("input:checked")].map(input=>input.value)})});
-  table(["Product","Category","Unit","Opening","Received","Issued","Available"],report.rows.map(row=>[row.name,row.category,row.unit,row.opening,row.received,row.issued,row.closing]),byId("report-preview"));
+  if (report.layout === "monthly-stock-v1") renderMonthlyReport(report, byId("report-preview"));
+  else {
+    byId("report-preview").classList.remove("stock-sheet-preview");
+    table(["Product","Category","Unit","Opening","Received","Issued","Available"],report.rows.map(row=>[row.name,row.category,row.unit,row.opening,row.received,row.issued,row.closing]),byId("report-preview"));
+  }
   await listReports();status.textContent="Report preview saved as a version. Download it below.";
 }catch(error){status.textContent=error.message;}});
 async function listReports(){const templates=await request("/api/templates");byId("template-list").replaceChildren();for(const template of templates)element("li",template.name,byId("template-list"));byId("report-history").replaceChildren();for(const report of await request("/api/reports")){const row=element("li",undefined,byId("report-history"));element("span",`${report.name} · ${report.from_date} to ${report.to_date}${report.needs_review?" · Review after corrections":""} `,row);const link=element("a","Download built-in Excel",row);link.href=`/api/reports/${report.id}/excel`;for(const template of templates){element("span"," · ",row);const alternate=element("a",`Use ${template.name}`,row);alternate.href=`/api/reports/${report.id}/excel?template_id=${template.id}`;}}}

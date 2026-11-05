@@ -130,6 +130,43 @@ input, select, textarea, fieldset { min-width: 0; }
 /* On phones, wide pinned tables leave too little space for daily movements.
    Cards keep each full name and its two balances outside the horizontal scroller. */
 .monthly-cards { display: none; }
+
+/* Match the stock workbook's yellow title, green item headers, yellow open
+   stock, blue consumed and red available headers. Text labels carry meaning
+   too, so no one needs to distinguish the colors to understand the sheet. */
+.stock-sheet-preview { overflow: visible; }
+.stock-sheet-banner { background: #ffef45; padding: 14px; border: 1px solid #8d8535; text-align: center; margin-bottom: 12px; }
+.stock-sheet-banner h3 { margin: 0; font-size: 1.1rem; }
+.stock-sheet-banner p { margin: 3px 0 0; }
+.stock-sheet-dates span { white-space: nowrap; }
+.stock-sheet-category { padding: 0; border: 0; margin-top: 24px; }
+.stock-sheet-category > h3 { margin: 0 0 8px; }
+.stock-sheet-scroll { overflow: auto; max-height: 65vh; border: 1px solid #97a392; }
+.stock-sheet-table { min-width: 720px; font-size: .9rem; }
+.stock-sheet-table caption { text-align: left; padding: 8px; }
+.stock-sheet-table th, .stock-sheet-table td { padding: 9px; border: 1px solid #b3bcb0; }
+.stock-sheet-table thead th { position: sticky; top: 0; z-index: 1; background: #92d050; color: #17231a; text-align: center; white-space: normal; }
+.stock-sheet-table .stock-sheet-name { min-width: 180px; max-width: 300px; white-space: normal; overflow-wrap: break-word; }
+.stock-sheet-table tbody th { background: white; font-weight: 500; }
+.stock-sheet-table .stock-sheet-packing, .stock-sheet-table .stock-sheet-specification { min-width: 110px; max-width: 240px; white-space: normal; overflow-wrap: break-word; }
+.stock-sheet-table thead .stock-sheet-stock_sheet_opening, .stock-sheet-balances .stock-sheet-stock_sheet_opening { background: #fff26b; }
+.stock-sheet-table thead .stock-sheet-issued, .stock-sheet-balances .stock-sheet-issued { background: #8bdcff; }
+.stock-sheet-table thead .stock-sheet-closing, .stock-sheet-balances .stock-sheet-closing { background: #ff9999; }
+.stock-sheet-table td.stock-sheet-stock_sheet_opening, .stock-sheet-table td.stock-sheet-issued, .stock-sheet-table td.stock-sheet-closing { text-align: right; font-variant-numeric: tabular-nums; }
+.stock-sheet-cards { display: none; }
+@media (max-width: 720px) {
+  .stock-sheet-scroll { display: none; }
+  .stock-sheet-cards { display: grid; gap: 12px; }
+  .stock-sheet-card { padding: 12px; border: 1px solid #aebbac; border-radius: 8px; }
+  .stock-sheet-card h4 { margin: 0 0 8px; font-size: 1rem; overflow-wrap: break-word; }
+  .stock-sheet-card > dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 0 0 12px; font-size: .9rem; }
+  .stock-sheet-card dt { font-weight: 650; }
+  .stock-sheet-card dd { margin: 0; overflow-wrap: anywhere; }
+  .stock-sheet-card > .stock-sheet-balances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+  .stock-sheet-balances > div { padding: 8px 10px; border-radius: 5px; min-width: 0; }
+  .stock-sheet-balances > div:last-child { grid-column: 1 / -1; }
+  .stock-sheet-balances dd { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+}
 @media (max-width: 720px) {
   #monthly-grid > table { display: none; }
   .monthly-cards { display: grid; gap: 14px; }
