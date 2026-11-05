@@ -32,7 +32,7 @@ function stockDetails(product) {
     totals.className = "stock-totals";
     for (const [label, field] of [["Opening", "opening"], ["Received", "received"], ["Issued", "issued"], ["Available", "balance"]]) {
       const line = document.createElement("p");
-      line.textContent = `${label}: ${snapshot[field]} ${product.unit}`;
+      line.textContent = `${label}: ${displayQuantity(snapshot[field], product)} ${product.unit}`;
       if (field === "balance") line.className = "stock-balance";
       totals.append(line);
     }
@@ -131,7 +131,7 @@ function stockDetails(product) {
       for (const entry of snapshot.entries) {
         const row = document.createElement("li");
         const label = { opening: "Opening", receive: "Received", issue: "Issued" }[entry.kind];
-        row.textContent = `${formatBusinessDate(entry.effective_date)} · ${entry.voided ? "VOIDED · " : ""}${label} ${entry.quantity} ${product.unit}${entry.notes ? ` · ${entry.notes}` : ""}`;
+        row.textContent = `${formatBusinessDate(entry.effective_date)} · ${entry.voided ? "VOIDED · " : ""}${label} ${displayQuantity(entry.quantity, product)} ${product.unit}${entry.notes ? ` · ${entry.notes}` : ""}`;
         if(currentUser?.permissions.includes("correct")&&!entry.voided) row.append(correctionForm(entry,renderStock));
         history.append(row);
       }

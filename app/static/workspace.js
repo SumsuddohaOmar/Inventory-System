@@ -24,6 +24,15 @@ for (const id of ["monthly-period", "closing-month"]) {
   }
 }
 
+// Format strings without floating-point rounding. Keep any meaningful existing
+// fractional digits, even if an older entry used more than the usual precision.
+function displayQuantity(value, product) {
+  const [whole, fraction = ""] = String(value).split(".");
+  const minimum = 1;
+  const digits = fraction.replace(/0+$/, "").padEnd(minimum, "0");
+  return whole + (digits ? "." + digits : "");
+}
+
 function businessToday() {
   // Cached catalog.today is a historical snapshot. Derive the current local
   // business date so an offline device still advances after midnight. The
@@ -67,7 +76,7 @@ async function loadWorkspace() {
   for(const product of catalog.filter(row=>!row.archived && row.low_stock_minor!==null)) {
     // Decimal comparison is for alert display only; stock validation stays on
     // the server. Scale from the persisted integer threshold without rounding.
-    if(Number(product.stock.balance)<=product.low_stock_minor/(10**product.precision)) element("li",`Low stock: ${product.name} — ${product.stock.balance} ${product.unit}`,byId("low-stock"));
+    if(Number(product.stock.balance)<=product.low_stock_minor/(10**product.precision)) element("li",`Low stock: ${product.name} — ${displayQuantity(product.stock.balance, product)} ${product.unit}`,byId("low-stock"));
   }
   for(const panel of document.querySelectorAll("[data-permission]")) panel.hidden=!permitted(panel.dataset.permission);
   byId("reports-section").hidden=!permitted("reports");
@@ -106,7 +115,7 @@ function drawBulkRows() {
   for(const product of catalog.filter(row=>!row.archived && row.category_id===byId("bulk-category").value && row.name.toLocaleLowerCase().includes(search))) {
     const row=element("div",undefined,target);row.className="bulk-row";
     const label=element("label",product.name,row);label.htmlFor=`bulk-${product.id}`;
-    element("small",`Available ${product.stock.balance} ${product.unit}`,label);
+    element("small",`Available ${displayQuantity(product.stock.balance, product)} ${product.unit}`,label);
     const input=element("input",undefined,row);input.id=`bulk-${product.id}`;input.inputMode="decimal";input.maxLength=40;input.placeholder="Quantity";input.value=bulkValues.get(product.id)?.quantity||"";
     input.addEventListener("input",()=>{const previous=bulkValues.get(product.id)||{id:inventoryUUID(),notes:""};bulkValues.set(product.id,{...previous,quantity:input.value});scheduleDraft();});
     const details=element("details",undefined,row);element("summary","Item notes & details",details);
@@ -418,7 +427,7 @@ function showMonth(){
     for (const [label, amount] of [["Opening", opening], ["Closing", closing]]) {
       const balance = element("div", undefined, balances);
       element("span", label, balance);
-      element("strong", minorText(amount, product.precision), balance);
+      element("strong", displayQuantity(minorText(amount, product.precision), product), balance);
     }
     const movementDetails = element("details", undefined, card);
     element("summary", "Daily receiving & issuing", movementDetails);
@@ -427,19 +436,19 @@ function showMonth(){
     dailyScroll.tabIndex = 0;
     dailyScroll.setAttribute("role", "region");
     dailyScroll.setAttribute("aria-label", product.name + " daily movements. Scroll horizontally for more dates.");
-    const row=element("tr",undefined,body);element("th",product.name,row).scope="row";element("td",minorText(opening,product.precision),row);element("td",product.unit,row);
+    const row=element("tr",undefined,body);element("th",product.name,row).scope="row";element("td",displayQuantity(minorText(opening, product.precision), product),row);element("td",product.unit,row);
     for(let day=1;day<=days;day++)for(const kind of ["receive","issue"]){const date=`${period}-${String(day).padStart(2,"0")}`,matching=entries.filter(entry=>entry.kind===kind&&entry.effective_date===date),total=matching.reduce((sum,entry)=>sum+minorValue(entry.quantity),0n);
-      const cell=element("td",undefined,row),button=element("button",minorText(total,product.precision),cell);button.className="cell-button";button.type="button";button.setAttribute("aria-label",`${product.name}, ${date}, ${kind}, ${minorText(total,product.precision)} ${product.unit}`);
+      const cell=element("td",undefined,row),button=element("button",displayQuantity(minorText(total, product.precision), product),cell);button.className="cell-button";button.type="button";button.setAttribute("aria-label",`${product.name}, ${date}, ${kind}, ${displayQuantity(minorText(total, product.precision), product)} ${product.unit}`);
       button.addEventListener("click",()=>editDailyCell(product,date,kind,matching,total));
       const mobileButton = element("button", undefined, dailyScroll);
       mobileButton.type = "button";
       mobileButton.className = "secondary";
       element("span", day + (kind === "receive" ? " · Receive" : " · Issue"), mobileButton);
-      element("strong", minorText(total, product.precision), mobileButton);
+      element("strong", displayQuantity(minorText(total, product.precision), product), mobileButton);
       mobileButton.setAttribute("aria-label", button.getAttribute("aria-label"));
       mobileButton.addEventListener("click", () => editDailyCell(product, date, kind, matching, total));
     }
-    element("td",minorText(closing,product.precision),row);
+    element("td",displayQuantity(minorText(closing, product.precision), product),row);
   }
 }
 function editDailyCell(product,date,kind,entries,total){const target=byId("monthly-editor");target.replaceChildren();element("h3",`${product.name} · ${date} · ${kind}`,target);
