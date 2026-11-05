@@ -403,14 +403,42 @@ function showMonth(){
   const host=byId("monthly-grid");host.replaceChildren();const grid=element("table",undefined,host),thead=element("thead",undefined,grid),head=element("tr",undefined,thead);
   for(const label of ["Product","Opening","Unit",...Array.from({length:days},(_,index)=>[`${index+1} R`,`${index+1} I`]).flat(),"Closing"])element("th",label,head).scope="col";
   const body=element("tbody",undefined,grid);
+  const cards = element("div", undefined, host);
+  cards.className = "monthly-cards";
   for(const product of catalog.filter(row=>row.category_id===byId("monthly-category").value)){
     const entries=product.stock.entries.filter(entry=>!entry.voided),first=`${period}-01`,last=`${period}-${String(days).padStart(2,"0")}`;
     const opening=entries.filter(entry=>entry.effective_date<first||(entry.kind==="opening"&&entry.effective_date<=last)).reduce((sum,entry)=>sum+(entry.kind==="issue"?-minorValue(entry.quantity):minorValue(entry.quantity)),0n);
     const closing=entries.filter(entry=>entry.effective_date<=last).reduce((sum,entry)=>sum+(entry.kind==="issue"?-minorValue(entry.quantity):minorValue(entry.quantity)),0n);
+    const card = element("article", undefined, cards);
+    card.className = "monthly-card";
+    element("h3", product.name, card);
+    element("p", product.unit, card).className = "hint";
+    const balances = element("div", undefined, card);
+    balances.className = "monthly-balances";
+    for (const [label, amount] of [["Opening", opening], ["Closing", closing]]) {
+      const balance = element("div", undefined, balances);
+      element("span", label, balance);
+      element("strong", minorText(amount, product.precision), balance);
+    }
+    const movementDetails = element("details", undefined, card);
+    element("summary", "Daily receiving & issuing", movementDetails);
+    const dailyScroll = element("div", undefined, movementDetails);
+    dailyScroll.className = "monthly-days";
+    dailyScroll.tabIndex = 0;
+    dailyScroll.setAttribute("role", "region");
+    dailyScroll.setAttribute("aria-label", product.name + " daily movements. Scroll horizontally for more dates.");
     const row=element("tr",undefined,body);element("th",product.name,row).scope="row";element("td",minorText(opening,product.precision),row);element("td",product.unit,row);
     for(let day=1;day<=days;day++)for(const kind of ["receive","issue"]){const date=`${period}-${String(day).padStart(2,"0")}`,matching=entries.filter(entry=>entry.kind===kind&&entry.effective_date===date),total=matching.reduce((sum,entry)=>sum+minorValue(entry.quantity),0n);
       const cell=element("td",undefined,row),button=element("button",minorText(total,product.precision),cell);button.className="cell-button";button.type="button";button.setAttribute("aria-label",`${product.name}, ${date}, ${kind}, ${minorText(total,product.precision)} ${product.unit}`);
-      button.addEventListener("click",()=>editDailyCell(product,date,kind,matching,total));}
+      button.addEventListener("click",()=>editDailyCell(product,date,kind,matching,total));
+      const mobileButton = element("button", undefined, dailyScroll);
+      mobileButton.type = "button";
+      mobileButton.className = "secondary";
+      element("span", day + (kind === "receive" ? " · Receive" : " · Issue"), mobileButton);
+      element("strong", minorText(total, product.precision), mobileButton);
+      mobileButton.setAttribute("aria-label", button.getAttribute("aria-label"));
+      mobileButton.addEventListener("click", () => editDailyCell(product, date, kind, matching, total));
+    }
     element("td",minorText(closing,product.precision),row);
   }
 }
