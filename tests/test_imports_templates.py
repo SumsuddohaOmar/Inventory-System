@@ -129,6 +129,31 @@ class ImportTemplateTests(unittest.TestCase):
         self.assertEqual(self.sync([operation],["read"])[0]["status"],"held")
         self.assertEqual(stock.get_stock(self.path,self.product["id"])["balance"],"10.000")
 
+    def test_two_offline_devices_compete_for_stock_and_retry_exactly_once(self):
+        self.movement("opening","10")
+        devices=[dict(id=str(uuid4()),product_id=self.product["id"],kind="issue",quantity="7",
+                      effective_date="2026-11-01",notes="") for _ in range(2)]
+        # Both devices last saw 10 available. A real DB write lock decides
+        # which gets the remaining stock, rather than trusting either cache.
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results=list(executor.map(lambda operation:self.sync([operation])[0],devices))
+        self.assertCountEqual([row["status"] for row in results],["saved","held"])
+        saved=next(operation for operation in devices if any(row["id"]==operation["id"] and row["status"]=="saved" for row in results))
+        held=next(operation for operation in devices if operation!=saved)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            retries=list(executor.map(lambda _:self.sync([saved])[0]["status"],range(2)))
+        self.assertEqual(retries,["saved","saved"])
+        self.assertEqual(stock.get_stock(self.path,self.product["id"])["balance"],"3.000")
+        self.movement("receive","10")
+        # More stock must NOT silently release a previously held operation.
+        self.assertEqual(self.sync([held])[0]["status"],"held")
+        review={**held,"id":str(uuid4()),"quantity":"2","resolves_id":held["id"]}
+        self.assertEqual(self.sync([review],["read","issue"])[0]["status"],"held")
+        authorized={**review,"id":str(uuid4()),"resolves_id":review["id"]}
+        self.assertEqual(self.sync([authorized])[0]["status"],"saved")
+        self.assertEqual(self.sync([held])[0]["status"],"resolved")
+        self.assertEqual(stock.get_stock(self.path,self.product["id"])["balance"],"11.000")
+
     def test_two_reviewers_only_post_one_replacement(self):
         self.movement("opening","10")
         bad=dict(id=str(uuid4()),product_id=self.product["id"],kind="issue",quantity="11",effective_date="2026-11-01",notes="")
@@ -140,6 +165,24 @@ class ImportTemplateTests(unittest.TestCase):
         self.assertEqual(stock.get_stock(self.path,self.product["id"])["balance"],"8.000")
         with database.connect(self.path) as connection:
             self.assertEqual(connection.execute("SELECT COUNT(*) FROM sync_holds WHERE resolved=0").fetchone()[0],0)
+        # Dependents attached to EITHER review UUID can now proceed, even when
+        # the other reviewer won the race and this UUID posted no stock.
+        for review in reviews:
+            dependent={**bad,"id":str(uuid4()),"quantity":"1","depends_on":[review["id"]]}
+            self.assertEqual(self.sync([dependent])[0]["status"],"saved")
+
+    def test_committed_retry_after_revoked_permission_returns_receipt_without_review(self):
+        self.movement("opening","10")
+        operation=dict(id=str(uuid4()),product_id=self.product["id"],kind="receive",quantity="2",effective_date="2026-11-01",notes="")
+        original=self.sync([operation])[0]
+        self.assertEqual(self.sync([operation],["read"])[0],original)
+        changed=self.sync([{**operation,"quantity":"9"}])[0]
+        self.assertEqual(changed["status"],"held")
+        self.assertFalse(changed["reviewable"])
+        with database.connect(self.path) as connection:
+            self.assertIsNone(connection.execute("SELECT 1 FROM sync_holds WHERE id=?",(operation["id"],)).fetchone())
+        self.assertEqual(self.sync([operation])[0],original)
+        self.assertEqual(stock.get_stock(self.path,self.product["id"])["balance"],"12.000")
 
     def test_malformed_sync_envelope_rejects_whole_batch_before_writes(self):
         self.movement("opening","10")

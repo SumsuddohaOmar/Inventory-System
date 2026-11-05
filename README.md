@@ -108,6 +108,31 @@ the server. The optional PIN locks the screen; it does not encrypt storage.
 Clearing browser storage can erase unsynchronized entries. Server backups do
 not include entries still waiting on a phone.
 
+Pending stock queues are independent for each browser profile/device and app
+origin. Two tabs in the same profile share that profile's queue and session.
+Each account's entries remain attached to their original owner after sign-out.
+Only the PostgreSQL cloud deployment accepts queue synchronization; local
+SQLite remains usable online but is not a queue sync target. Existing local
+pending records are retained, never redirected or copied to another server.
+Use the same cloud address on every device; no device-to-device copying occurs.
+
+Cloud stock creates are written to IndexedDB before transmission. Uncertain
+responses retain the same UUID for retries; the server checks current account
+permissions and dated stock balances inside serialized write transactions.
+Held conflicts do not retry automatically, even if more stock becomes available.
+An authorized reviewer supplies an explicit replacement; the original conflict
+is preserved, and dependent entries wait for review to finish. The connection
+panel warns that clearing browser data, changing profiles or uninstalling can
+erase unsynced work. Close-page warnings are best-effort, especially on phones.
+After upgrading, reload existing tabs before syncing: the server requires the
+new account-owner header on sync requests. Old IndexedDB records need no schema
+migration and retain their existing retry UUIDs.
+
+Optional real-browser queue tests use Playwright/Chromium:
+`node tests/offline-browser.cjs`. They check actual IndexedDB across reloads,
+two tabs sharing one profile, and independent contexts representing two devices.
+They intercept all traffic and never contact the live inventory.
+
 ## Tests and learning
 
 ```powershell

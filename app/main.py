@@ -167,6 +167,9 @@ def create_app(database_path: Path | None = None) -> FastAPI:
         # Render the storage label from the server configuration, even offline
         # when the browser uses its cached copy of this app shell.
         page = (STATIC / "index.html").read_text(encoding="utf-8")
+        if dsn:
+            page = page.replace('name="inventory-cloud-sync" content="disabled"',
+                                'name="inventory-cloud-sync" content="enabled"')
         storage = "Cloud storage: PostgreSQL" if dsn else "Local storage: SQLite"
         return HTMLResponse(page.replace("Inventory workspace · No subscription", f"{storage} · No subscription"))
 

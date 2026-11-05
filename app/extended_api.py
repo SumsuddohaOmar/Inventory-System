@@ -178,6 +178,15 @@ def register(application, path):
             return await call_next(request)
         user = accounts.session_user(path, request.cookies.get("inventory_session"))
         if not user: return JSONResponse(status_code=401, content={"detail": "Sign in to use your inventory."})
+        # A tab can retain an offline profile after another tab switches the
+        # shared session cookie. Never post its queue under the new account.
+        owner = request.headers.get("x-inventory-owner")
+        if route in ("/api/sync", "/api/sync/status") and not owner:
+            return JSONResponse(status_code=409, content={"detail": "Reload this app before synchronizing. The queue owner must be confirmed; existing pending entries are kept."})
+        if owner and owner != user["id"]:
+            return JSONResponse(status_code=409, content={"detail": "The signed-in account changed. Pending entries remain with their original account. Sign back in to synchronize."})
+        if route.startswith("/api/sync") and not application.state.postgres_pilot:
+            return JSONResponse(status_code=409, content={"detail": "Pending queues synchronize only with the cloud inventory. Local server data is not a cloud sync target."})
         request.state.user = user
         permissions = {"read"}
         if route.startswith("/api/users"): permissions = {"users"}
@@ -457,8 +466,28 @@ def register(application, path):
                     # Claim/review the conflict and apply its replacement under
                     # one write lock. Two reviewers cannot both resolve it.
                     connection.execute("BEGIN IMMEDIATE")
+                    committed=connection.execute("SELECT 1 FROM operations WHERE id=?",(identity,)).fetchone()
+                    if committed:
+                        # This is a receipt lookup, not a new stock write. A
+                        # lost response followed by permission revocation must
+                        # never turn an already-saved movement into a reviewable
+                        # replacement (which could duplicate the original).
+                        try:
+                            values=StockInput(**{key:value for key,value in operation.items() if key not in ("product_id","depends_on","resolves_id")})
+                            result=stock.save_entry(path,str(UUID(product)),values.model_dump(mode="json"),connection)
+                        except (stock.StockError, ValueError):
+                            failed.add(identity);blocked.add(product)
+                            outcomes.append({"id":identity,"status":"held","reviewable":False,"reason":"This save ID is already committed with different data. Check stock history; it cannot be replaced through conflict review."})
+                            continue
+                        outcomes.append({"id":identity,"status":"saved","result":result})
+                        # Reconcile any hold left by an older client/server
+                        # version for a save that is already in the ledger.
+                        connection.execute("UPDATE sync_holds SET resolved=1 WHERE id=?",(identity,))
+                        continue
                     held=connection.execute("SELECT * FROM sync_holds WHERE id=?",(identity,)).fetchone()
                     if held:
+                        if held["owner"] != request.state.user["id"]:
+                            require(request.state.user, "correct")
                         if held["resolved"]:
                             outcomes.append({"id":identity,"status":"resolved","reason":"This held operation was explicitly reviewed."});continue
                         failed.add(identity);blocked.add(product)
@@ -474,9 +503,15 @@ def register(application, path):
                         if not resolution:raise stock.StockError("The held operation no longer exists.")
                         original=json.loads(resolution["payload_json"])
                         if original.get("product_id")!=product or original.get("kind")!=operation.get("kind"):raise stock.StockError("A reviewed replacement must keep the original product and transaction type.")
-                        if resolution["resolved"] and not already:
+                        original_saved=connection.execute("SELECT 1 FROM operations WHERE id=?",(operation["resolves_id"],)).fetchone()
+                        if (resolution["resolved"] or original_saved) and not already:
                             # A second reviewer must not create another stock
                             # entry or another held conflict for the same review.
+                            # Keep a resolved alias: another device may already
+                            # have queued dependents against this review UUID.
+                            connection.execute("INSERT INTO sync_holds VALUES (?,?,?,?,1) ON CONFLICT (id) DO NOTHING",
+                                               (identity,request.state.user["id"],json.dumps(operation),"Another authorized review resolved the original conflict."))
+                            connection.execute("UPDATE sync_holds SET resolved=1 WHERE id=?",(operation["resolves_id"],))
                             outcomes.append({"id":identity,"status":"resolved","reason":"Another review already resolved this conflict; this replacement was not posted."})
                             continue
                     values=StockInput(**{key:value for key,value in operation.items() if key not in ("product_id","depends_on","resolves_id")})

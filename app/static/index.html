@@ -6,6 +6,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#17543e">
+  <meta name="inventory-cloud-sync" content="disabled">
   <title>Local Inventory · Stock</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -39,7 +40,7 @@
     </nav>
     <div data-screen="dashboard">
     <aside id="dashboard"><strong>Inventory overview</strong><p id="dashboard-summary">Loading balances…</p><ul id="low-stock"></ul></aside>
-    <section aria-labelledby="sync-heading"><h2 id="sync-heading">Connection &amp; pending entries</h2><p id="sync-status" role="status">Checking connection…</p><button id="sync-now" type="button" class="secondary">Sync now</button><details><summary>Connect another device</summary><p id="connection-address"></p><p id="connection-help"></p><img id="connection-qr" src="/api/connection/qr.svg" width="222" height="222" alt="QR code for this server address"></details><ul id="sync-queue"></ul><details data-permission="correct"><summary>Review held server entries</summary><button id="server-holds-refresh" type="button" class="secondary">Load held entries</button><ul id="server-holds"></ul></details></section>
+    <section aria-labelledby="sync-heading"><h2 id="sync-heading">Connection &amp; pending entries</h2><p id="sync-status" role="status">Checking connection…</p><p class="hint">Pending entries belong to this browser on this device. They reach other devices only after the cloud accepts them. Pending quantities are not confirmed stock. Held entries need authorized review. Do not clear browser data, uninstall this app, or change browser profiles while entries are pending: unsynced work can be lost. Signing out keeps this account’s pending entries here; sign back in to synchronize.</p><button id="sync-now" type="button" class="secondary">Sync now</button><details><summary>Connect another device</summary><p id="connection-address"></p><p id="connection-help"></p><img id="connection-qr" src="/api/connection/qr.svg" width="222" height="222" alt="QR code for this server address"></details><ul id="sync-queue"></ul><details data-permission="correct"><summary>Review held server entries</summary><button id="server-holds-refresh" type="button" class="secondary">Load held entries</button><ul id="server-holds"></ul></details></section>
     </div>
     <div data-screen="products" hidden>
     <section class="category-section" aria-labelledby="categories-heading">

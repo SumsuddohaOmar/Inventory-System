@@ -163,13 +163,15 @@ class WorkflowTests(unittest.TestCase):
         accounts.update_user(self.path,employee["id"],["read"],True)
         self.assertNotIn("receive",accounts.session_user(self.path,token)["permissions"])
 
-    def policy(self,method,route,token=None,body=None,origin=None):
+    def policy(self,method,route,token=None,body=None,origin=None,owner=None,cloud=False):
         """Drive only immediate in-memory awaits, without creating a socket/event loop."""
         app=create_app(self.path)
+        app.state.postgres_pilot=cloud  # Exercise cloud policy with a disposable DB.
         dispatch=next(item.kwargs["dispatch"] for item in app.user_middleware if item.kwargs.get("dispatch",None) and item.kwargs["dispatch"].__name__=="access_control")
         headers=[]
         if token:headers.append((b"cookie",f"inventory_session={token}".encode()))
         if origin:headers.append((b"origin",origin.encode()))
+        if owner:headers.append((b"x-inventory-owner",owner.encode()))
         async def receive():return {"type":"http.request","body":json.dumps(body or {}).encode(),"more_body":False}
         request=Request({"type":"http","method":method,"path":route,"root_path":"","scheme":"http","headers":headers,"server":("127.0.0.1",8000),"query_string":b""},receive)
         async def next_handler(request):return JSONResponse({"allowed":True})
@@ -186,6 +188,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.policy("GET","/api/products",token).status_code,200)
         self.assertEqual(self.policy("POST",f'/api/products/{self.product["id"]}/stock',token,{"kind":"receive"}).status_code,403)
         self.assertEqual(self.policy("POST","/api/setup",origin="https://other.example").status_code,403)
+
+    def test_sync_checks_current_session_owner_and_cloud_target(self):
+        user=accounts.create_user(self.path,"Staff","long test passphrase",["read","issue"])
+        token,_=accounts.login(self.path,"staff","long test passphrase")
+        self.assertEqual(self.policy("POST","/api/sync",token,{},owner=user["id"],cloud=True).status_code,200)
+        self.assertEqual(self.policy("POST","/api/sync",token,{},owner="another-account",cloud=True).status_code,409)
+        self.assertEqual(self.policy("POST","/api/sync",token,{},cloud=True).status_code,409)
+        self.assertEqual(self.policy("POST","/api/sync",token,{},owner=user["id"]).status_code,409)
+        self.assertEqual(self.policy("POST","/api/sync",None,{},cloud=True).status_code,401)
+        accounts.update_user(self.path,user["id"],["read"],False)
+        self.assertEqual(self.policy("POST","/api/sync",token,{},owner=user["id"],cloud=True).status_code,401)
 
     def test_report_periods_snapshots_and_workbook_xml(self):
         self.opening("100");stock.save_entry(self.path,self.product["id"],self.entry("receive","20"));stock.save_entry(self.path,self.product["id"],self.entry("issue","15"))
