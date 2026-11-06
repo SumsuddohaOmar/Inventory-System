@@ -17,7 +17,7 @@ def main():
     os.chdir(ROOT)
     loader=unittest.TestLoader()
     suite=unittest.TestSuite()
-    for name in ("categories","stock","launcher","workflows","imports_templates","monthly_report","history_imports","release"):
+    for name in ("categories","stock","launcher","workflows","imports_templates","monthly_report","excel_feed","history_imports","release"):
         suite.addTests(loader.discover(str(ROOT/"tests"),pattern=f"test_{name}.py"))
     success=unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful()
     node=shutil.which("node")

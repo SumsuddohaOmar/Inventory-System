@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
@@ -101,7 +101,7 @@ class MonthlyReportTests(unittest.TestCase):
             self.assertEqual(sheet.find(".//{*}c[@r='C6']/{*}is/{*}t").text,"1 x 5KG")
             self.assertEqual(sheet.find(".//{*}pane").get("topLeftCell"),"A6")
 
-    def test_cutlery_fields_are_literal_and_legacy_exports_keep_their_format(self):
+    def test_cutlery_fields_are_literal_and_partial_exports_keep_their_format(self):
         self.entry("opening","0","2026-10-01")
         with database.connect(self.path) as connection:
             connection.execute("UPDATE products SET name=?,category_id=?,fields_json=? WHERE id=?",
@@ -112,11 +112,56 @@ class MonthlyReportTests(unittest.TestCase):
             self.assertEqual(sheet.find(".//{*}c[@r='C6']/{*}is/{*}t").text,"=1+1")
             self.assertEqual(sheet.find(".//{*}c[@r='D6']/{*}is/{*}t").text,"<steel> & safe")
             self.assertIsNone(sheet.find(".//{*}f"))
-        legacy=reports.create(self.path,"2026-11-01","2026-11-30",exclude_zero=False)
+        legacy=reports.create(self.path,"2026-11-01","2026-11-02",exclude_zero=False)
         self.assertNotIn("layout",legacy)
         with ZipFile(BytesIO(reports.workbook(legacy))) as archive:
             sheet=ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
             self.assertEqual(sheet.find(".//{*}c[@r='E3']/{*}is/{*}t").text,"Received")
+
+    def test_custom_full_month_uses_monthly_layout_and_exact_reference_colors(self):
+        self.entry("opening","15","2026-11-01")
+        self.entry("receive","10","2026-11-02")
+        app=create_app(self.path)
+        endpoint=next(route.endpoint for route in app.routes if getattr(route,"path",None)=="/api/reports" and "POST" in route.methods)
+        report=endpoint(ReportInput(start=date(2026,11,1),end=date(2026,11,30),kind="custom"))
+        self.assertEqual(report["layout"],"monthly-stock-v1")
+        self.assertEqual(report["rows"][0]["stock_sheet_opening"],"25.000")
+        with ZipFile(BytesIO(reports.workbook(report))) as archive:
+            styles=ET.fromstring(archive.read("xl/styles.xml"))
+            colors=[node.get("rgb") for node in styles.findall(".//{*}fgColor")]
+            for color in ("FFFFFF00","FF92D050","FF00B0F0","FFFF0000"):
+                self.assertIn(color,colors)
+
+    def test_older_saved_monthly_download_updates_layout_without_changing_snapshot(self):
+        self.entry("opening","15","2026-11-01")
+        self.entry("receive","10","2026-11-02")
+        report=self.make()
+        # Simulate exactly the old untagged snapshot behind the user's export.
+        for key in ("layout","company_name"):report.pop(key,None)
+        for row in report["rows"]:row.pop("stock_sheet_opening",None)
+        serialized=json.dumps(report)
+        with database.connect(self.path) as connection:
+            connection.execute("UPDATE report_versions SET payload_json=? WHERE id=?",(serialized,report["id"]))
+        self.entry("receive","5","2026-11-03")
+        app=create_app(self.path)
+        endpoint=next(route.endpoint for route in app.routes if getattr(route,"path",None)=="/api/reports/{identity}/excel")
+        response=endpoint(UUID(report["id"]))
+        with ZipFile(BytesIO(response.body)) as archive:
+            sheet=ET.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+            headers=["".join(cell.itertext()) for cell in sheet.findall(".//{*}row[@r='5']/{*}c")]
+            self.assertNotIn("Received",headers)
+            self.assertIn("Consumed",headers)
+            self.assertEqual(sheet.find(".//{*}c[@r='E6']/{*}v").text,"25.000")
+            self.assertEqual(sheet.find(".//{*}c[@r='G6']/{*}v").text,"25.000")
+        with database.connect(self.path) as connection:
+            self.assertEqual(connection.execute("SELECT payload_json FROM report_versions WHERE id=?",(report["id"],)).fetchone()[0],serialized)
+
+    def test_calendar_month_detection_handles_leap_years_and_partial_ranges(self):
+        self.assertTrue(reports.full_calendar_month("2028-02-01","2028-02-29"))
+        self.assertTrue(reports.full_calendar_month("2026-12-01","2026-12-31"))
+        for first,last in (("2028-02-01","2028-02-28"),("2026-11-02","2026-11-30"),
+                           ("2026-11-01","2026-12-31"),(None,None)):
+            self.assertFalse(reports.full_calendar_month(first,last))
 
 
 if __name__ == "__main__":

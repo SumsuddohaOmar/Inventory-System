@@ -85,7 +85,12 @@ def workbook(report):
                       f"{category} · {period}", "Open stock = previous closing + received this month. Available stock = open stock - consumed."]
             for line, title in enumerate(titles, 1):
                 xml_rows.append(f'<row r="{line}" ht="24" customHeight="1">{cell(f"A{line}",title,1 if line<=3 else 7)}</row>')
-            header_cells = [cell(f'{chr(65+col)}5', label, styles.get(key, 2)) for col, (key, label, _) in enumerate(headers)]
+            # The reference's cutlery sheet uses yellow item headers and a
+            # white serial header; the other categories use green item headers.
+            header_cells = [cell(f'{chr(65+col)}5', label,
+                                 0 if category_id == "cutlery-cookeries" and key == "number" else
+                                 styles.get(key, 3 if category_id == "cutlery-cookeries" else 2))
+                            for col, (key, label, _) in enumerate(headers)]
             xml_rows.append('<row r="5" ht="32" customHeight="1">' + "".join(header_cells) + '</row>')
             for number, original in enumerate(rows, 1):
                 row = {**original, "number": number, "stock_sheet_opening": stock_sheet_opening(original), "packing": custom_field(original,"packing"),
@@ -111,7 +116,7 @@ def workbook(report):
         archive.writestr("xl/_rels/workbook.xml.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + "".join(relations) + '</Relationships>')
         archive.writestr("_rels/.rels", '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>')
         archive.writestr("[Content_Types].xml", '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + "".join(overrides) + '</Types>')
-        fills = ['none','gray125','FFFFFF00','FF92D050','FFFFFF00','FF00B0F0','FFFF7777']
+        fills = ['none','gray125','FFFFFF00','FF92D050','FFFFFF00','FF00B0F0','FFFF0000']
         fill_xml = ''.join(f'<fill><patternFill patternType="{color}"/></fill>' if color in ('none','gray125')
                            else f'<fill><patternFill patternType="solid"><fgColor rgb="{color}"/><bgColor indexed="64"/></patternFill></fill>' for color in fills)
         # Style indices: body, title, identity header, three balance headers,

@@ -25,6 +25,12 @@ for (const [category_id,category,name] of [['dry-foods','Dry Foods','BALSAMIC VI
       assert.equal(await page.locator('.stock-sheet-table thead').first().innerText().then(text=>text.includes('Received')),false);
       assert.equal(await page.locator('.stock-sheet-table tbody tr').first().locator('td.stock-sheet-stock_sheet_opening').innerText(),'12.3');
       assert.equal(await page.locator('.stock-sheet-card').first().locator('.stock-sheet-closing dd').innerText(),'11.0');
+      const prefix=width<=720?'.stock-sheet-balances ':'.stock-sheet-table thead ';
+      for(const [selector,color] of [['.stock-sheet-stock_sheet_opening','rgb(255, 255, 0)'],['.stock-sheet-issued','rgb(0, 176, 240)'],['.stock-sheet-closing','rgb(255, 0, 0)']]) {
+        assert.equal(await page.locator(prefix+selector).first().evaluate(node=>getComputedStyle(node).backgroundColor),color);
+      }
+      assert.equal(await page.locator('.stock-sheet-cutlery thead .stock-sheet-code').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 255, 0)');
+      assert.equal(await page.locator('.stock-sheet-cutlery thead .stock-sheet-number').evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 255, 255)');
       assert.equal(await page.locator('#report-preview img').count(),0);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${width}px page overflow`);
       assert.equal(await page.locator('.stock-sheet-cards').first().isVisible(),width<=720);

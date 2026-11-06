@@ -128,6 +128,8 @@ def register(application, path):
     """Attach authenticated workflows to one application/database factory instance."""
     # Local import avoids a module cycle while sharing the exact stock model.
     from app.main import StockInput
+    from app import excel_feed
+    excel_feed.register(application,path)
 
     def require(user, permission):
         if permission not in user["permissions"]: raise HTTPException(403, f"Permission required: {permission}")
@@ -176,6 +178,12 @@ def register(application, path):
                 return JSONResponse(status_code=413, content={"detail": "Request is too large."})
         if not route.startswith("/api/") or route in ("/api/session", "/api/setup", "/api/logout"):
             return await call_next(request)
+        if route.startswith("/api/excel-feed/"):
+            # This narrow GET-only service authenticates its scoped Basic
+            # password itself. It never grants a browser session or write access.
+            if request.method not in ("GET","HEAD"):
+                return JSONResponse(status_code=405,content={"detail":"The Excel feed is read-only."})
+            return await call_next(request)
         user = accounts.session_user(path, request.cookies.get("inventory_session"))
         if not user: return JSONResponse(status_code=401, content={"detail": "Sign in to use your inventory."})
         # A tab can retain an offline profile after another tab switches the
@@ -189,7 +197,8 @@ def register(application, path):
             return JSONResponse(status_code=409, content={"detail": "Pending queues synchronize only with the cloud inventory. Local server data is not a cloud sync target."})
         request.state.user = user
         permissions = {"read"}
-        if route.startswith("/api/users"): permissions = {"users"}
+        if route.startswith("/api/excel/"): permissions = {"read","reports"}
+        elif route.startswith("/api/users"): permissions = {"users"}
         elif route.startswith("/api/audit"): permissions = {"audit"}
         elif route.startswith("/api/backups"): permissions = {"backups"}
         elif route.startswith(("/api/reports","/api/templates")): permissions = {"reports"}
@@ -622,7 +631,8 @@ def register(application, path):
     @application.get("/api/settings")
     def settings():
         with database.connect(path) as connection:
-            return {row["key"]: json.loads(row["value_json"]) for row in connection.execute("SELECT * FROM settings")}
+            return {row["key"]: json.loads(row["value_json"]) for row in connection.execute("SELECT * FROM settings")
+                    if not row["key"].startswith(excel_feed.PREFIX)}
 
     @application.put("/api/settings")
     def change_settings(values: dict):

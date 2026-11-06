@@ -1,5 +1,34 @@
 # Verification record — November 2, 2026
 
+## Excel daily connection follow-up — November 6, 2026
+
+The prepared copy passed native Windows Excel refresh/calculation checks using
+synthetic quantities: opening 10, received 2.5, issued 1, closing 11.5 and next
+month opening 11.5. Test inputs were cleared before saving the production query.
+The source workbook is unchanged. A read-only audit confirmed preservation of
+79,111 original calculation formulas and 338,720 new daily links, blank first
+opening cells, no cached formula errors, a native Power Query connection and
+a macro-free output. The saved Overview and App Data views were rendered and
+reviewed. These checks do not establish authenticated refresh from Render.
+
+The selected categories, stock, workflow, import/template, monthly report,
+Excel feed, history import and release suites passed 88 tests, including 15
+new feed tests. They cover exact daily aggregation, corrections, voids, blank
+unmatched rows, duplicate mapping, unlinking, scoped passwords, revocation,
+current account permissions and cookie/Basic isolation at endpoint/policy level.
+
+Chromium checks passed for Excel setup/review at 320, 375 and 1280px and monthly
+report layouts at five widths. Real IndexedDB tests passed for reload, shared
+tabs and independent devices. All 13 socket-free offline tests and browser
+script syntax checks passed. No live inventory was modified.
+
+The additional complete HTTP/ASGI check could not run in this sandbox: Windows
+asyncio stalls creating its socketpair before the event loop starts. The
+optional `tests/excel-feed-http.py` is retained for a normal environment with
+httpx installed. First live authenticated refresh after deployment, and the
+first Mac desktop refresh, remain acceptance checks. No Mac, browser-Excel or
+mobile-Excel refresh result is claimed.
+
 Environment: Windows, Python 3.14.3; versions in requirements-lock.txt.
 Run `python verify.py` using the project environment for socket-free checks.
 Tests use disposable SQLite databases and do not write to the live inventory.

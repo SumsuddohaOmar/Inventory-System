@@ -56,6 +56,7 @@ function renderMonthlyReport(report, target) {
     scroller.setAttribute("aria-label", `${rows[0].category} monthly stock sheet. Scroll for all columns.`);
     const grid = element("table", undefined, scroller);
     grid.className = "stock-sheet-table";
+    if (rows[0].category_id === "cutlery-cookeries") grid.classList.add("stock-sheet-cutlery");
     element("caption", `${rows[0].category} · ${month}`, grid);
     const heading = element("tr", undefined, element("thead", undefined, grid));
     for (const [key, label] of columns) {
