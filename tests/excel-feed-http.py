@@ -19,7 +19,8 @@ async def check():
         fixture.entry("opening", "0", "2026-11-01")
         fixture.entry("receive", "2.5", "2026-11-02")
         root = f"/api/excel-feed/{fixture.manifest['id']}/odata/"
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=fixture.app), base_url="https://inventory.example") as client:
+        # testserver is explicitly allowed by the app's Host validation.
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=fixture.app), base_url="https://testserver") as client:
             denied = await client.get(root)
             assert denied.status_code == 401 and denied.headers["www-authenticate"].startswith("Basic")
             auth = ("excel", fixture.result["password"])

@@ -1,5 +1,33 @@
 # Verification record — November 2, 2026
 
+## Conflicting phone draft switch follow-up — November 7, 2026
+
+The first retry patch did not resolve the user's phone report. A complete
+HTTP/browser regression reproduced a separate failure: Start another draft
+retried the rejected save while leaving the form editable. On a slow response,
+typing and Finalize could race the identity reset, yielding another conflict or
+Draft not found. The previous fragment tests did not cover this interaction.
+
+Starting another draft now waits only for an already-running autosave, preserves
+the old draft in IndexedDB, and prepares a fresh local identity without retrying
+the conflict. Its controls are locked until ready. Finalize also keeps the form
+locked through save, posting and local cleanup, captures the original identity
+and account, and prevents draft switches during that operation.
+
+The full app passed real HTTP, session-cookie and IndexedDB tests at desktop and
+phone sizes, including receiving and issuing. The regression that failed before
+the patch now verifies: old local quantity 3 is preserved; the cloud conflict
+remains unchanged/unfinalized; fresh quantity 4 is recorded exactly once.
+The earlier delayed/lost-response and independent-tab conflict tests also pass.
+Run `tests/draft-http-server.py`, then `node tests/draft-http-browser.cjs` with
+Playwright/Chromium available. The server uses a disposable local database and
+test account; it does not connect to Neon or use production credentials.
+
+Network permission allows asyncio's local socketpair in this environment, so
+full HTTP testing can now run. The Excel HTTP fixture's Host was corrected to
+the app's allowed `testserver` host. Earlier socket restrictions and emulated
+mobile checks do not substitute for the user's real-phone acceptance.
+
 ## Mobile bulk draft retry follow-up — November 7, 2026
 
 Draft autosave retries now compare parsed entries rather than JSON key order.

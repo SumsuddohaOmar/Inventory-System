@@ -15,7 +15,7 @@ const draftCode=source.slice(source.indexOf('function draftRows()'),source.index
       await page.addScriptTag({content:`
         const scenario=${JSON.stringify(scenario)};
         let bulkValues=new Map([['product',{id:'entry',quantity:'2',notes:''}]]);
-        let draftIdentity='draft',draftRevision=0,draftTimer,draftChain=Promise.resolve();const draftAttempts=new Map();
+        let draftIdentity='draft',draftRevision=0,draftTimer,draftChain=Promise.resolve(),bulkBusy=false;const draftAttempts=new Map();
         let currentUser={id:'phone-user'},catalog=[],categories=[];
         const inventoryUUID=()=>crypto.randomUUID();
         const byId=id=>document.getElementById(id);

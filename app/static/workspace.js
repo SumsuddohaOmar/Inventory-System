@@ -9,6 +9,7 @@ let draftRevision = 0;
 let draftTimer;
 let draftChain = Promise.resolve();
 const draftAttempts = new Map();
+let bulkBusy = false;
 let companyPreferences={date_format:"YYYY-MM-DD",time_format:"24h",utc_offset_minutes:180};
 const byId = (id) => document.getElementById(id);
 const permitted = (permission) => currentUser?.permissions.includes(permission);
@@ -213,11 +214,12 @@ async function listDrafts() {
   const target=byId("draft-list");target.replaceChildren();
   const local=(await localAll("meta")).filter(row=>row.id.startsWith(`draft:${currentUser.id}:`));
   for(const saved of local){const item=element("li",undefined,target),button=element("button",`Open ${saved.value.kind} draft · ${saved.value.date}`,item);button.type="button";button.className="secondary";
-    button.addEventListener("click",async()=>{await restoreLocalDraft(saved.value.identity);drawBulkRows();byId("bulk-section").scrollIntoView();});}
+    button.addEventListener("click",async()=>{if(bulkBusy)return;await restoreLocalDraft(saved.value.identity);drawBulkRows();byId("bulk-section").scrollIntoView();});}
   try{for(const saved of await request("/api/drafts"))if(!local.some(value=>value.value.identity===saved.id)){
     const entries=JSON.parse(saved.payload_json);if(!entries.length)continue;
     const item=element("li",undefined,target),button=element("button",`Open Windows-saved draft · ${entries[0].effective_date}`,item);button.type="button";button.className="secondary";
     button.addEventListener("click",async()=>{
+      if(bulkBusy)return;
       if(new Set(entries.map(entry=>`${entry.kind}:${entry.effective_date}`)).size>1){status.textContent="This draft contains different dates/types. It has been preserved unchanged.";return;}
       if (entries[0].kind === "opening") { byId("draft-status").textContent = "This opening-stock draft is preserved. Use Products → Stock details."; return; }
       const first=entries[0],product=catalog.find(value=>value.id===first.product_id);
@@ -233,25 +235,63 @@ async function queueRows(rows) {
   await renderQueue();
 }
 
+function lockBulkEntry() {
+  // Finalize, draft switches and typing must not change the active identity
+  // halfway through one another. Keep existing disabled states on restore.
+  bulkBusy=true;
+  const controls=[...byId("bulk-form").querySelectorAll("input,select,button"),...byId("draft-list").querySelectorAll("button")];
+  const states=controls.map(control=>[control,control.disabled]);
+  for(const [control] of states)control.disabled=true;
+  return ()=>{bulkBusy=false;for(const [control,disabled] of states)if(control.isConnected)control.disabled=disabled;};
+}
+
 byId("bulk-form").addEventListener("submit",async(event)=>{
-  event.preventDefault();clearTimeout(draftTimer);
+  event.preventDefault();if(bulkBusy)return;clearTimeout(draftTimer);
   const rows=draftRows();if(!rows.length){status.textContent="Enter at least one quantity.";return;}
-  const button=event.submitter;button.disabled=true;
+  const identity=draftIdentity,owner=currentUser.id,unlock=lockBulkEntry();
   try{
-    await saveDraft();
-    await request(`/api/drafts/${draftIdentity}/finalize`,{method:"POST"});
-    status.textContent="Bulk entry finalized. All products saved together.";
-  }catch(error){
-    if(error.rejected){byId("draft-status").textContent=`Not finalized: ${error.message} Your draft is kept.`;return;}
-    const today=businessToday();
-    if(rows.some(row=>row.effective_date>today)){status.textContent="Future-dated entries remain drafts. Review and finalize them on or after their date.";return;}
-    await queueRows(rows);status.textContent="Bulk rows kept offline for sync. Pending entries are not included in confirmed balances.";
-  }finally{button.disabled=false;}
-  await localDelete("meta",`draft:${currentUser.id}:${draftIdentity}`);await localDelete("meta",`active-draft:${currentUser.id}`);
-  draftIdentity=inventoryUUID();draftRevision=0;bulkValues.clear();drawBulkRows();
-  await loadWorkspace();await loadProducts();
+    try{
+      await saveDraft();
+      await request(`/api/drafts/${identity}/finalize`,{method:"POST",headers:{"X-Inventory-Owner":owner}});
+      status.textContent="Bulk entry finalized. All products saved together.";
+    }catch(error){
+      if(error.rejected){byId("draft-status").textContent=`Not finalized: ${error.message} Your draft is kept. Use Start another draft to preserve it and begin a separate entry.`;return;}
+      if(currentUser?.id!==owner){byId("draft-status").textContent="The account changed. The original account's draft is kept; sign back in before retrying.";return;}
+      const today=businessToday();
+      if(rows.some(row=>row.effective_date>today)){status.textContent="Future-dated entries remain drafts. Review and finalize them on or after their date.";return;}
+      await queueRows(rows);status.textContent="Bulk rows kept offline for sync. Pending entries are not included in confirmed balances.";
+    }
+    await localDelete("meta",`draft:${owner}:${identity}`);await localDelete("meta",`active-draft:${owner}`);
+    draftAttempts.delete(identity);
+    draftIdentity=inventoryUUID();draftRevision=0;bulkValues.clear();drawBulkRows();
+    await loadWorkspace();await loadProducts();
+  }finally{unlock();}
 });
-byId("new-draft").addEventListener("click",async()=>{try{await saveDraft();}catch{}draftIdentity=inventoryUUID();draftRevision=0;bulkValues.clear();byId("bulk-notes").value="";await localPut("meta",{id:`active-draft:${currentUser.id}`,value:draftIdentity});drawBulkRows();await listDrafts();});
+
+byId("new-draft").addEventListener("click",async()=>{
+  if(bulkBusy)return;
+  clearTimeout(draftTimer);
+  const unlock=lockBulkEntry(),owner=currentUser.id;
+  byId("draft-status").textContent="Keeping this draft locally and preparing a new draft…";
+  try{
+    // Let any already-sent autosave finish, but do NOT send the rejected draft
+    // again. Starting a separate draft must work offline or during a conflict.
+    await draftChain.catch(()=>{});
+    if(currentUser?.id!==owner)throw new Error("The account changed. Sign back in to recover this draft.");
+    const previous=draftAttempts.get(draftIdentity);
+    const saved={identity:draftIdentity,revision:draftRevision,values:[...bulkValues],category:byId("bulk-category").value,kind:byId("bulk-kind").value,date:byId("bulk-date").value,notes:byId("bulk-notes").value,
+      pendingEntries:previous?.pendingEntries,previousAttempt:previous?.previousAttempt};
+    await localPut("meta",{id:`draft:${owner}:${draftIdentity}`,value:saved});
+    const next={identity:inventoryUUID(),revision:0,values:[],category:saved.category,kind:saved.kind,date:saved.date,notes:""};
+    await localPut("meta",{id:`draft:${owner}:${next.identity}`,value:next});
+    await localPut("meta",{id:`active-draft:${owner}`,value:next.identity});
+    draftIdentity=next.identity;draftRevision=0;bulkValues.clear();byId("bulk-notes").value="";
+    drawBulkRows();
+    byId("draft-status").textContent="New draft ready. The previous draft is kept under Saved drafts and has not been finalized.";
+  }catch(error){byId("draft-status").textContent=`Could not start a new draft. Your entries are kept. ${error.message}`;}
+  finally{unlock();}
+  void listDrafts().catch(()=>{});
+});
 for(const id of ["bulk-category","bulk-search"])byId(id).addEventListener("input",drawBulkRows);
 for(const id of ["bulk-kind","bulk-date","bulk-notes"])byId(id).addEventListener("input",scheduleDraft);
 
