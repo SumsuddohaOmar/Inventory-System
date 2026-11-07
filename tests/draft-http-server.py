@@ -17,6 +17,9 @@ if __name__=="__main__":
         accounts.create_user(path,"draft-test","local test passphrase",first=True)
         product=database.insert_product(path,dict(id=str(uuid4()),name="Draft test rice",unit="KG",category_id="dry-foods",precision=1,created_at="2026-11-01"))
         stock.save_entry(path,product["id"],dict(id=str(uuid4()),kind="opening",effective_date="2026-11-01",quantity="100",notes="Disposable test"))
+        for name in ("ASST SOFT DRINKS", "BALSAMIC VINEGAR", "BUTTER PORTION", "CEASAR SALAD DRESSING", "COFFEE BRU", "SUGAR REFINED", "TOMATO KETCHUP 340GM", "EXTRA LONG PRODUCT NAME WITH PACKING 1 PACKET X 1 KG"):
+            item=database.insert_product(path,dict(id=str(uuid4()),name=name,unit="PKT",category_id="dry-foods",precision=1,created_at="2026-11-01"))
+            stock.save_entry(path,item["id"],dict(id=str(uuid4()),kind="opening",effective_date="2026-11-01",quantity="25",notes="Disposable layout fixture"))
         app=create_app(path)
         app.state.postgres_pilot=True
         app.state.public_origin="http://127.0.0.1:8129"

@@ -19,7 +19,7 @@ const draftCode=source.slice(source.indexOf('function draftRows()'),source.index
         let currentUser={id:'phone-user'},catalog=[],categories=[];
         const inventoryUUID=()=>crypto.randomUUID();
         const byId=id=>document.getElementById(id);
-        const status=byId('draft-status');
+        const status=byId('draft-status');const feedbackFor=node=>node.id==='bulk-form'?byId('draft-status'):node;
         const store=new Map();
         const copy=x=>JSON.parse(JSON.stringify(x));
         async function localGet(table,id){return store.get(id)&&copy(store.get(id));}

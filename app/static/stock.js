@@ -16,7 +16,7 @@ function stockDetails(product) {
     if (!panel.open || loaded) return;
     content.textContent = "Loading stock…";
     try { await renderStock(); loaded = true; }
-    catch { content.textContent = "Stock could not load. Run Start Inventory.cmd and use the page it opens."; }
+    catch { content.textContent = "Stock could not load. Check your connection and reopen stock details."; }
   });
 
   async function renderStock() {
@@ -93,6 +93,7 @@ function stockDetails(product) {
     let pending = null;
     editor.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const status=feedbackFor(editor);
       if (submit.disabled) return;
       const values = { kind: kind.value, effective_date: day.value, quantity: quantity.value.trim(), notes: notes.value.trim() };
       const fingerprint = JSON.stringify(values);
@@ -110,10 +111,10 @@ function stockDetails(product) {
         status.textContent = result.queued ? `Entry kept offline for ${product.name}. It is pending sync and is not included in the server balance yet.` : `Stock entry saved for ${product.name}.`;
         // A failed refresh does not mean the committed write failed.
         editor.remove();
-        try { await renderStock(); heading.focus(); }
+        try { await renderStock(); heading.focus(); status.textContent=result.queued ? `Entry kept offline for ${product.name}. It is pending sync.` : `Stock entry saved for ${product.name}.`; }
         catch { loaded = false; status.textContent = "Entry was saved. Close and reopen stock details to refresh the balance."; }
       } catch (error) {
-        feedback.textContent = error.rejected ? `Not saved: ${error.message}`
+        feedbackFor(feedback).textContent = error.rejected ? `Not saved: ${error.message}`
           : `Save could not be confirmed. ${error.message} Close and reopen stock details to check history before entering different data.`;
       } finally { checkPermission(); }
     });

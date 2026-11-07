@@ -61,7 +61,7 @@ async function pinHash(pin,salt) {
   const bytes=await crypto.subtle.deriveBits({name:"PBKDF2",salt:new Uint8Array(salt),iterations:250000,hash:"SHA-256"},material,256);
   return [...new Uint8Array(bytes)].map(value=>value.toString(16).padStart(2,"0")).join("");
 }
-document.querySelector("#pin-save").addEventListener("click",async()=>{
+document.querySelector("#pin-save").addEventListener("click",async()=>{const status=feedbackFor(document.querySelector("#pin-save"));
   const pin=document.querySelector("#new-pin").value;
   if(!/^\d{4,12}$/.test(pin)){status.textContent="Use a PIN of 4–12 digits.";return;}
   const salt=[...crypto.getRandomValues(new Uint8Array(16))];
@@ -79,8 +79,8 @@ document.querySelector("#pin-unlock-form").addEventListener("submit",async(event
   if(await sessionGate()){await initialize();await loadWorkspace();}
 });
 document.querySelector("#pin-use-password").addEventListener("click",()=>{document.querySelector("#pin-panel").hidden=true;document.querySelector("#auth-panel").hidden=false;});
-document.querySelector("#pin-lock").addEventListener("click",async()=>{if(!await localGet("meta",`pin:${currentUser.id}`)){status.textContent="Set a PIN first.";return;}pinUnlocked=false;await sessionGate();});
-document.querySelector("#pin-remove").addEventListener("click",async()=>{
+document.querySelector("#pin-lock").addEventListener("click",async()=>{const status=feedbackFor(document.querySelector("#pin-lock"));if(!await localGet("meta",`pin:${currentUser.id}`)){status.textContent="Set a PIN first.";return;}pinUnlocked=false;await sessionGate();});
+document.querySelector("#pin-remove").addEventListener("click",async()=>{const status=feedbackFor(document.querySelector("#pin-remove"));
   const password=document.querySelector("#pin-account-password");
   const response=await fetch("/api/session",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,password:password.value})});
   password.value="";

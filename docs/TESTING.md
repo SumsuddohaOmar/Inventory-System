@@ -1,5 +1,29 @@
 # Verification record — November 2, 2026
 
+## Action feedback and compact mobile layout — November 7, 2026
+
+User-triggered messages now belong to the form/button that initiated the request.
+The shared footer status was removed; only startup failures use the header's
+global notice. Each async action captures its feedback writer before awaiting.
+Rebuilt forms retain confirmation in their feature; an offscreen result also
+gets a dismissible on-screen copy. Screen changes dismiss that copy, and delayed
+results from another screen do not appear over the current menu. Bulk finalize
+success replaces the autosave message in the same status region.
+
+Phone text is slightly smaller, with separate styles for product names, labels,
+available quantities, unit badges and hints. Names receive more horizontal space
+and wrap without truncation. Inputs remain 16px and touch controls remain at
+least 44px. The test inventory contains long uppercase names and packing text.
+
+Full browser checks passed at 320, 375, 412 and 1280px for inline bulk success/
+errors, product saves, insufficient-stock input preservation, stock saves after
+form rebuild, company settings, product management, PIN validation, backups,
+audit, activity, monthly history and report creation. A deliberately delayed
+report response stayed in Reports while Settings showed its own feedback. A
+375px service-worker reload offline retained the updated UI and working local
+validation. Rendered phone views were inspected. All data was disposable; real
+Android/iPhone acceptance follows an approved deployment.
+
 ## Conflicting phone draft switch follow-up — November 7, 2026
 
 The first retry patch did not resolve the user's phone report. A complete

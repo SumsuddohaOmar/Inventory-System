@@ -3,7 +3,7 @@
 "use strict";
 let excelProfile = null;
 let excelPasswordProfile = null;
-const excelMessage = message => { byId("excel-feedback").textContent = message; };
+const excelMessage = (message,anchor=byId("excel-feedback")) => { feedbackFor(anchor).textContent = message; };
 const excelRoot = identity => `${location.origin}/api/excel-feed/${identity}/odata/`;
 
 function showExcelPassword(result) {
@@ -25,7 +25,7 @@ async function showExcelConnections() {
     button.className = "secondary";
     button.addEventListener("click", async () => {
       try { await showExcelProfile(await request(`/api/excel/connections/${profile.id}`)); }
-      catch (error) { excelMessage(error.message); }
+      catch (error) { excelMessage(error.message,button); }
     });
   }
 }
@@ -75,14 +75,15 @@ byId("excel-setup-form").addEventListener("submit", async event => {
     showExcelPassword(result);
     await showExcelProfile(result);
     await showExcelConnections();
-    excelMessage("Connection created. Use username excel and the password shown here in Excel's Basic authentication dialog. This password is shown only now.");
-  } catch (error) { excelMessage(error.message); }
+    excelMessage("Connection created. Use username excel and the password shown here in Excel's Basic authentication dialog. This password is shown only now.",button);
+  } catch (error) { excelMessage(error.message,button); }
   finally { button.disabled = false; }
 });
-byId("excel-list-refresh").addEventListener("click",()=>showExcelConnections().catch(error=>excelMessage(error.message)));
+byId("excel-list-refresh").addEventListener("click",()=>showExcelConnections().catch(error=>excelMessage(error.message,byId("excel-list-refresh"))));
 byId("excel-copy-password").addEventListener("click",async()=>{
-  try { await navigator.clipboard.writeText(byId("excel-password").value); excelMessage("Excel password copied. Paste it only into Excel's connection password field."); }
-  catch { excelMessage("Select and copy the Excel password from the field above."); }
+  const button=byId("excel-copy-password");
+  try { await navigator.clipboard.writeText(byId("excel-password").value); excelMessage("Excel password copied. Paste it only into Excel's connection password field.",button); }
+  catch { excelMessage("Select and copy the Excel password from the field above.",button); }
 });
 for (const [id,action] of [["excel-rematch","match"],["excel-reset-password","password"],["excel-disable","revoke"],["excel-link-product","link"],["excel-unlink-product","unlink"]]) {
   byId(id).addEventListener("click",async()=>{
@@ -95,8 +96,8 @@ for (const [id,action] of [["excel-rematch","match"],["excel-reset-password","pa
       if(result.password) showExcelPassword(result);
       await showExcelProfile(result);
       await showExcelConnections();
-      excelMessage(action==="revoke"?"Excel refresh disabled for this connection. Saved app data is preserved.":action==="password"?"New Excel password created. The previous password no longer works. Update Excel's saved credentials.":"Product links updated. Refresh All in Excel to fetch the daily quantities.");
-    } catch(error) { excelMessage(error.message); }
+      excelMessage(action==="revoke"?"Excel refresh disabled for this connection. Saved app data is preserved.":action==="password"?"New Excel password created. The previous password no longer works. Update Excel's saved credentials.":"Product links updated. Refresh All in Excel to fetch the daily quantities.",button);
+    } catch(error) { excelMessage(error.message,button); }
     finally {button.disabled=false;}
   });
 }

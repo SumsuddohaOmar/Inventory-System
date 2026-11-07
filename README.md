@@ -135,6 +135,11 @@ They intercept all traffic and never contact the live inventory.
 
 ## Tests and learning
 
+Action feedback appears beside the relevant form or button. When a rebuilt list
+or long preview puts it offscreen, a dismissible notice shows the same result
+without requiring a scroll to the page bottom. Phone layouts distinguish item
+names from smaller balance/unit metadata and keep touch targets usable.
+
 An optional read-only Excel connection supplies daily receiving and issuing
 to a prepared workbook, with manual **Data → Refresh All**. Existing workbook
 opening stock and formulas stay in Excel. See [EXCEL_LINK.md](docs/EXCEL_LINK.md)

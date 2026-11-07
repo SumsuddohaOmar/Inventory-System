@@ -6,7 +6,7 @@
 const form = document.querySelector("#product-form");
 const save = document.querySelector("#save");
 const refresh = document.querySelector("#refresh");
-const status = document.querySelector("#status");
+const status = feedbackFor(document.querySelector("#status"));
 const products = document.querySelector("#products");
 const count = document.querySelector("#count");
 const categoryInput = document.querySelector("#category");
@@ -40,6 +40,7 @@ function drawFilters() {
     button.textContent = category.name;
     button.setAttribute("aria-pressed", String(selectedCategory === category.id));
     button.addEventListener("click", async () => {
+      const status=feedbackFor(categoryButtons);
       selectedCategory = category.id;
       // Update state in place so keyboard focus remains on the chosen button.
       for (const sibling of categoryButtons.children) sibling.setAttribute("aria-pressed", String(sibling === button));
@@ -70,7 +71,7 @@ function assignmentForm(product) {
   button.textContent = "Save category";
   editor.append(label, select, button);
   editor.addEventListener("submit", async (event) => {
-    event.preventDefault();
+    event.preventDefault();const status=feedbackFor(event.currentTarget);
     if (button.disabled) return;
     button.disabled = true;
     try {
@@ -78,10 +79,9 @@ function assignmentForm(product) {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: select.value }),
       });
-      status.textContent = `Category saved for ${product.name}.`;
       // Refresh may remove the edited row from the current category. Restore
       // focus to a stable control instead of leaving it on a detached element.
-      try { await loadProducts(); await loadWorkspace(); }
+      try { await loadProducts(); await loadWorkspace(); status.textContent = `Category saved for ${product.name}.`; }
       catch { status.textContent = "Category was saved, but the list could not refresh. Use Refresh list."; }
       refresh.focus();
     } catch (error) {
@@ -121,7 +121,9 @@ async function loadProducts() {
     const name = document.createElement("strong");
     const unit = document.createElement("span");
     const category = document.createElement("span");
+    name.className="product-name";
     name.textContent = product.name;
+    unit.className="product-meta";category.className="product-meta";
     unit.textContent = `Unit: ${product.unit}`;
     category.textContent = `Category: ${categories.find((entry) => entry.id === product.category_id)?.name || "Unassigned"}`;
     item.append(name, unit, category, stockDetails(product), assignmentForm(product));
@@ -131,7 +133,7 @@ async function loadProducts() {
 }
 
 form.addEventListener("submit", async (event) => {
-  event.preventDefault(); // Keep this page open rather than navigating on submit.
+  event.preventDefault();const status=feedbackFor(event.currentTarget); // Keep this page open rather than navigating on submit.
   if (save.disabled) return; // Ignore a second submission while one is in flight.
   const name = form.elements.name.value.trim();
   const unit = form.elements.unit.value.trim();
@@ -158,7 +160,7 @@ form.addEventListener("submit", async (event) => {
     // Reveal the saved record even if the user was browsing another category.
     selectedCategory = category_id;
     drawFilters();
-    status.textContent = `${name} saved to SQLite.`;
+    status.textContent = `${name} saved.`;
     try { await loadProducts(); await loadWorkspace(); }
     catch { status.textContent = `${name} was saved, but the list could not refresh. Use Refresh list.`; }
     form.elements.name.focus();
@@ -170,9 +172,10 @@ form.addEventListener("submit", async (event) => {
 });
 
 refresh.addEventListener("click", async () => {
+  const status=feedbackFor(refresh);
   refresh.disabled = true;
   try { await initialize(); await loadWorkspace(); status.textContent = "Product list refreshed."; }
-  catch { status.textContent = "Could not load products. Check that the local server is running."; }
+  catch { status.textContent = "Could not load products. Check your connection and try again."; }
   finally { refresh.disabled = false; }
 });
 
@@ -198,5 +201,5 @@ async function initialize() {
 
 sessionGate().then(async(ready)=>{ if(ready) { await initialize(); await loadWorkspace(); } }).catch(() => {
   count.textContent = "Products could not be loaded.";
-  status.textContent = "Please run Start Inventory.cmd to load the latest update and use the page it opens. Your saved products are kept.";
+  status.textContent = "Could not load the inventory. Check your connection and reload the app. Your saved entries are kept.";
 });

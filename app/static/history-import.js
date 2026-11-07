@@ -40,7 +40,7 @@ for (const identity of ["history-file", "history-sheet", "history-header"])
   byId(identity).addEventListener("change", invalidateHistory);
 
 byId("history-file-form").addEventListener("submit", async(event)=>{
-  event.preventDefault();
+  event.preventDefault();const status=feedbackFor(event.currentTarget);
   const button = event.submitter;
   button.disabled = true;
   invalidateHistory();
@@ -74,7 +74,7 @@ byId("history-file-form").addEventListener("submit", async(event)=>{
 // Editing a mapping cannot leave an old preview available for accidental apply.
 byId("history-map-form").addEventListener("change", ()=>{byId("history-apply-form").hidden=true;});
 byId("history-map-form").addEventListener("submit", async(event)=>{
-  event.preventDefault();
+  event.preventDefault();const status=feedbackFor(event.currentTarget);
   if (!historySource) return;
   const button = event.submitter;
   button.disabled = true;
@@ -125,7 +125,7 @@ byId("history-map-form").addEventListener("submit", async(event)=>{
 });
 
 byId("history-apply-form").addEventListener("submit", async(event)=>{
-  event.preventDefault();
+  event.preventDefault();const status=feedbackFor(event.currentTarget);
   const button = event.submitter;
   button.disabled = true;
   try {

@@ -44,7 +44,9 @@ const {chromium}=require('playwright');
         const postedId=await page.evaluate(()=>[...bulkValues.values()][0].id);
         await page.locator('#bulk-form button[type="submit"]').click();
         await page.waitForFunction(()=>!document.querySelector('#bulk-form button[type=submit]').disabled);
-        const message=await page.locator('#status').innerText();
+        const message=await page.locator('#draft-status').innerText();
+        assert.equal(await page.locator('#status').innerText(),'');
+        assert.doesNotMatch(message,/Stock has not changed/);
         assert.match(message,/Bulk entry finalized/,JSON.stringify({mode,message,draft:await page.locator('#draft-status').innerText(),requests,errors}));
         const saved=await page.evaluate(async({oldId,postedId})=>{
           const local=await localGet('meta',`draft:${currentUser.id}:${oldId}`);
@@ -67,8 +69,10 @@ const {chromium}=require('playwright');
         await page.locator('#bulk-rows input[inputmode="decimal"]').first().fill(quantity);
         await page.waitForFunction(()=>document.getElementById('draft-status').textContent.includes('Draft saved locally and on the server'));
         await page.locator('#bulk-form button[type="submit"]').click();
-        await page.waitForFunction(()=>document.getElementById('status').textContent.includes('Bulk entry finalized')||document.getElementById('draft-status').textContent.includes('Not finalized'));
-        const message=await page.locator('#status').innerText();
+        await page.waitForFunction(()=>document.getElementById('draft-status').textContent.includes('Bulk entry finalized')||document.getElementById('draft-status').textContent.includes('Not finalized'));
+        const message=await page.locator('#draft-status').innerText();
+        assert.equal(await page.locator('#status').innerText(),'');
+        assert.doesNotMatch(message,/Stock has not changed/);
         assert.match(message,/Bulk entry finalized/,JSON.stringify({mode,kind,message,draft:await page.locator('#draft-status').innerText(),requests,errors}));
         // An explicit new draft must have a fresh identity and no inherited
         // revision, even while a debounce timer or slow save is still present.

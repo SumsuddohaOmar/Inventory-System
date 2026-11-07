@@ -28,10 +28,10 @@ const root=path.join(__dirname,'..');
           }
           return url==='/api/excel/connections'?[profile]:profile;
         }
-      `+fs.readFileSync(path.join(root,'app/static/excel-link.js'),'utf8')});
+      `+fs.readFileSync(path.join(root,'app/static/feedback.js'),'utf8')+fs.readFileSync(path.join(root,'app/static/excel-link.js'),'utf8')});
       await page.locator('#excel-setup-file').setInputFiles({name:'setup.json',mimeType:'application/json',buffer:Buffer.from('{}')});
       await page.locator('#excel-setup-form button').click();
-      await page.waitForFunction(()=>document.getElementById('excel-feedback').textContent.includes('Connection created'));
+      await page.waitForFunction(()=>document.body.textContent.includes('Connection created'));
       assert.equal(await page.locator('#excel-password').inputValue(),'fixture-only-password');
       assert.equal(await page.locator('#excel-password').getAttribute('type'),'password');
       assert.equal(await page.locator('#excel-workbook-row').inputValue(),'dry-foods:8');
@@ -42,7 +42,7 @@ const root=path.join(__dirname,'..');
       await page.locator('#excel-unlink-product').click();
       await page.waitForFunction(()=>document.getElementById('excel-selected').textContent.includes('1/2'));
       await page.locator('#excel-disable').click();
-      await page.waitForFunction(()=>document.getElementById('excel-feedback').textContent.includes('disabled'));
+      await page.waitForFunction(()=>document.body.textContent.includes('Excel refresh disabled'));
       assert.match(await page.locator('#excel-connections').innerText(),/Disabled/);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`${width}px overflow`);
       await page.evaluate(()=>showExcelProfile({id:'another-profile',label:'Another workbook',linked:0,total:0,active:true,items:[]}));

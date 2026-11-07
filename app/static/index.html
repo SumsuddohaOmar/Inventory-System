@@ -10,6 +10,7 @@
   <title>Local Inventory · Stock</title>
   <link rel="stylesheet" href="/static/styles.css">
   <link rel="manifest" href="/static/manifest.webmanifest">
+  <script src="/static/feedback.js" defer></script>
   <script src="/static/offline.js" defer></script>
   <script src="/static/auth.js" defer></script>
   <script src="/static/stock.js" defer></script>
@@ -22,7 +23,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header><span class="eyebrow">YOUR STORE · YOUR DATA</span><h1>Local Inventory</h1>
-    <p>Your products, your history, your local inventory.</p><p id="account-name"></p><button id="logout" class="secondary" hidden>Sign out</button></header>
+    <p>Your products, your history, your local inventory.</p><p id="account-name"></p><button id="logout" class="secondary" hidden>Sign out</button><p id="status" role="status" aria-live="polite" aria-atomic="true"></p></header>
   <section id="auth-panel" aria-labelledby="auth-title">
     <h2 id="auth-title">Sign in to your inventory</h2><p id="auth-help">Loading account status…</p>
     <form id="auth-form"><label for="username">Username</label><input id="username" name="username" required maxlength="80" autocomplete="username">
@@ -167,7 +168,6 @@
     </section>
     </div>
     <!-- Present in the initial DOM so assistive technology can announce updates. -->
-    <p id="status" role="status" aria-live="polite" aria-atomic="true"></p>
     <noscript><p>JavaScript is required to save and display products. Enable it and reload this page.</p></noscript>
   </main>
   <footer>Inventory workspace · No subscription</footer>

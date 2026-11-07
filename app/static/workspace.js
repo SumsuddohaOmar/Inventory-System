@@ -106,7 +106,7 @@ async function loadWorkspace() {
   // Populate secondary screens after the product workspace is usable.
   void Promise.allSettled([listDrafts(),permitted("products")?listCategories():Promise.resolve(),permitted("reports")?listReports():Promise.resolve(),permitted("users")?listEmployees():Promise.resolve(),
     permitted("settings")?loadSettings():Promise.resolve(),permitted("backups")?listBackups():Promise.resolve()]);
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{status.textContent="Offline installation needs a trusted secure connection.";});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{feedbackFor(byId("sync-status")).textContent="Offline installation needs a trusted secure connection.";});
   if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});
   syncPending();
 }
@@ -116,11 +116,11 @@ function drawBulkRows() {
   const search=byId("bulk-search").value.toLocaleLowerCase();
   for(const product of catalog.filter(row=>!row.archived && row.category_id===byId("bulk-category").value && row.name.toLocaleLowerCase().includes(search))) {
     const row=element("div",undefined,target);row.className="bulk-row";
-    const label=element("label",product.name,row);label.htmlFor=`bulk-${product.id}`;
-    element("small",`Available ${displayQuantity(product.stock.balance, product)} ${product.unit}`,label);
+    const label=element("label",undefined,row);element("span",product.name,label).className="bulk-product-name";label.htmlFor=`bulk-${product.id}`;
+    const available=element("small",undefined,label);available.className="bulk-availability";available.append("Available ");element("strong",displayQuantity(product.stock.balance, product),available);element("span",product.unit,available).className="unit-badge";
     const input=element("input",undefined,row);input.id=`bulk-${product.id}`;input.inputMode="decimal";input.maxLength=40;input.placeholder="Quantity";input.value=bulkValues.get(product.id)?.quantity||"";
     input.addEventListener("input",()=>{const previous=bulkValues.get(product.id)||{id:inventoryUUID(),notes:""};bulkValues.set(product.id,{...previous,quantity:input.value});scheduleDraft();});
-    const details=element("details",undefined,row);element("summary","Item notes & details",details);
+    const details=element("details",undefined,row);element("summary","Notes & details",details);
     element("p",`Unit: ${product.unit}. Precision: ${product.precision} decimal places. ${product.notes}`,details);
     const noteLabel=element("label","Item notes",details);noteLabel.htmlFor=`bulk-notes-${product.id}`;
     const notes=element("input",undefined,details);notes.id=noteLabel.htmlFor;notes.maxLength=200;notes.value=bulkValues.get(product.id)?.notes||"";
@@ -220,6 +220,7 @@ async function listDrafts() {
     const item=element("li",undefined,target),button=element("button",`Open Windows-saved draft · ${entries[0].effective_date}`,item);button.type="button";button.className="secondary";
     button.addEventListener("click",async()=>{
       if(bulkBusy)return;
+      const status=feedbackFor(button);
       if(new Set(entries.map(entry=>`${entry.kind}:${entry.effective_date}`)).size>1){status.textContent="This draft contains different dates/types. It has been preserved unchanged.";return;}
       if (entries[0].kind === "opening") { byId("draft-status").textContent = "This opening-stock draft is preserved. Use Products → Stock details."; return; }
       const first=entries[0],product=catalog.find(value=>value.id===first.product_id);
@@ -246,7 +247,7 @@ function lockBulkEntry() {
 }
 
 byId("bulk-form").addEventListener("submit",async(event)=>{
-  event.preventDefault();if(bulkBusy)return;clearTimeout(draftTimer);
+  event.preventDefault();const status=feedbackFor(event.currentTarget);if(bulkBusy)return;clearTimeout(draftTimer);
   const rows=draftRows();if(!rows.length){status.textContent="Enter at least one quantity.";return;}
   const identity=draftIdentity,owner=currentUser.id,unlock=lockBulkEntry();
   try{
@@ -255,8 +256,8 @@ byId("bulk-form").addEventListener("submit",async(event)=>{
       await request(`/api/drafts/${identity}/finalize`,{method:"POST",headers:{"X-Inventory-Owner":owner}});
       status.textContent="Bulk entry finalized. All products saved together.";
     }catch(error){
-      if(error.rejected){byId("draft-status").textContent=`Not finalized: ${error.message} Your draft is kept. Use Start another draft to preserve it and begin a separate entry.`;return;}
-      if(currentUser?.id!==owner){byId("draft-status").textContent="The account changed. The original account's draft is kept; sign back in before retrying.";return;}
+      if(error.rejected){status.textContent=`Not finalized: ${error.message} Your draft is kept. Use Start another draft to preserve it and begin a separate entry.`;return;}
+      if(currentUser?.id!==owner){status.textContent="The account changed. The original account's draft is kept; sign back in before retrying.";return;}
       const today=businessToday();
       if(rows.some(row=>row.effective_date>today)){status.textContent="Future-dated entries remain drafts. Review and finalize them on or after their date.";return;}
       await queueRows(rows);status.textContent="Bulk rows kept offline for sync. Pending entries are not included in confirmed balances.";
@@ -269,10 +270,11 @@ byId("bulk-form").addEventListener("submit",async(event)=>{
 });
 
 byId("new-draft").addEventListener("click",async()=>{
+  const status=feedbackFor(byId("draft-status"));
   if(bulkBusy)return;
   clearTimeout(draftTimer);
   const unlock=lockBulkEntry(),owner=currentUser.id;
-  byId("draft-status").textContent="Keeping this draft locally and preparing a new draft…";
+  status.textContent="Keeping this draft locally and preparing a new draft…";
   try{
     // Let any already-sent autosave finish, but do NOT send the rejected draft
     // again. Starting a separate draft must work offline or during a conflict.
@@ -287,8 +289,8 @@ byId("new-draft").addEventListener("click",async()=>{
     await localPut("meta",{id:`active-draft:${owner}`,value:next.identity});
     draftIdentity=next.identity;draftRevision=0;bulkValues.clear();byId("bulk-notes").value="";
     drawBulkRows();
-    byId("draft-status").textContent="New draft ready. The previous draft is kept under Saved drafts and has not been finalized.";
-  }catch(error){byId("draft-status").textContent=`Could not start a new draft. Your entries are kept. ${error.message}`;}
+    status.textContent="New draft ready. The previous draft is kept under Saved drafts and has not been finalized.";
+  }catch(error){status.textContent=`Could not start a new draft. Your entries are kept. ${error.message}`;}
   finally{unlock();}
   void listDrafts().catch(()=>{});
 });
@@ -305,10 +307,10 @@ function correctionForm(entry,reload) {
   const label=element("label",undefined,form);label.className="check";const voided=element("input",undefined,label);voided.type="checkbox";voided.disabled=entry.kind==="opening";label.append(document.createTextNode("Void this receipt/issue (keep history)"));
   const button=element("button","Save correction",form);
   const operation=inventoryUUID();
-  form.addEventListener("submit",async(event)=>{event.preventDefault();button.disabled=true;try{
+  form.addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);button.disabled=true;try{
     await request(`/api/entries/${entry.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:operation,expected_revision:entry.revision,
       quantity:fields.quantity.value,effective_date:fields.effective_date.value,notes:fields.notes.value,voided:voided.checked})});
-    status.textContent="Correction saved with before/after audit history.";await reload();
+    await reload();status.textContent="Correction saved with before/after audit history.";
   }catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
   return details;
 }
@@ -329,9 +331,9 @@ function showActivity() {
     table(["Date","Product","Type","Quantity","Unit","Notes"],totals,byId("activity-results"));
   }else table(["Date","Product","Type","Quantity","Unit","Notes"],rows,byId("activity-results"));
 }
-byId("activity-refresh").addEventListener("click",async()=>{catalog=await request("/api/catalog");showActivity();});
+byId("activity-refresh").addEventListener("click",async()=>{const status=feedbackFor(byId("activity-refresh"));try{catalog=await request("/api/catalog");showActivity();status.textContent="Activity refreshed.";}catch(error){status.textContent=error.message;}});
 
-byId("report-form").addEventListener("submit",async(event)=>{event.preventDefault();try{
+byId("report-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{
   const report=await request("/api/reports",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({start:byId("report-from").value,end:byId("report-to").value,kind:byId("report-kind").value,name:byId("report-name").value,exclude_zero:byId("report-zero").checked,
     product_ids:[...byId("report-items").querySelectorAll("input:checked")].map(input=>input.value)})});
   if (report.layout === "monthly-stock-v1") renderMonthlyReport(report, byId("report-preview"));
@@ -349,7 +351,7 @@ function managedFields(){return Object.fromEntries([["Packing",byId("manage-pack
 byId("custom-field-add").addEventListener("click",()=>addCustomField());
 function showManagedProduct(){const product=catalog.find(row=>row.id===byId("manage-product").value);if(!product)return;byId("manage-name").value=product.name;byId("manage-code").value=product.code;byId("manage-notes").value=product.notes;byId("manage-order").value=product.sort_order;byId("manage-archived").checked=!!product.archived;byId("manage-low").value=product.low_stock_minor===null?"":(product.low_stock_minor/(10**product.precision)).toFixed(product.precision);const fields=JSON.parse(product.fields_json||"{}");byId("manage-packing").value=fields.Packing||"";byId("manage-specification").value=fields.Specification||"";byId("custom-fields").replaceChildren();customFieldControls=[];for(const [key,value]of Object.entries(fields))if(!["Packing","Specification"].includes(key))addCustomField(key,value);}
 byId("manage-product").addEventListener("change",showManagedProduct);
-byId("manage-form").addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/catalog/${byId("manage-product").value}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("manage-name").value,code:byId("manage-code").value,notes:byId("manage-notes").value,sort_order:Number(byId("manage-order").value),archived:byId("manage-archived").checked,low_stock:byId("manage-low").value,custom_fields:managedFields()})});await loadWorkspace();await loadProducts();status.textContent="Product details saved; history retained.";}catch(error){status.textContent=error.message;}});
+byId("manage-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request(`/api/catalog/${byId("manage-product").value}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("manage-name").value,code:byId("manage-code").value,notes:byId("manage-notes").value,sort_order:Number(byId("manage-order").value),archived:byId("manage-archived").checked,low_stock:byId("manage-low").value,custom_fields:managedFields()})});await loadWorkspace();await loadProducts();status.textContent="Product details saved; history retained.";}catch(error){status.textContent=error.message;}});
 byId("safe-delete-product").addEventListener("click", async () => {
   const select = byId("manage-product");
   if (!select.value) return;
@@ -360,7 +362,7 @@ byId("safe-delete-product").addEventListener("click", async () => {
     : `Delete unused product "${productName}"?`;
   if (!window.confirm(message)) return;
   const button = byId("safe-delete-product");
-  const feedback = byId("product-delete-status");
+  const feedback = feedbackFor(byId("product-delete-status"));
   button.disabled = true;
   feedback.textContent = "Deleting product…";
   try {
@@ -378,11 +380,11 @@ byId("safe-delete-product").addEventListener("click", async () => {
 
 const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts"};
 for(const [permission,name]of Object.entries(permissionNames)){const label=element("label",undefined,byId("employee-permissions"));label.className="check";const input=element("input",undefined,label);input.type="checkbox";input.value=permission;input.checked=permission==="read";label.append(document.createTextNode(name));}
-byId("employee-form").addEventListener("submit",async(event)=>{event.preventDefault();try{await request("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:byId("employee-name").value,password:byId("employee-password").value,permissions:[...byId("employee-permissions").querySelectorAll("input:checked")].map(input=>input.value)})});byId("employee-password").value="";await listEmployees();status.textContent="Employee created.";}catch(error){status.textContent=error.message;}});
+byId("employee-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:byId("employee-name").value,password:byId("employee-password").value,permissions:[...byId("employee-permissions").querySelectorAll("input:checked")].map(input=>input.value)})});byId("employee-password").value="";await listEmployees();status.textContent="Employee created.";}catch(error){status.textContent=error.message;}});
 async function listEmployees(){byId("employee-list").replaceChildren();for(const user of await request("/api/users")){const row=element("li",undefined,byId("employee-list"));element("strong",`${user.username}${user.admin?" · Administrator":""}`,row);const form=element("form",undefined,row),checks=[];
   for(const [permission,name]of Object.entries(permissionNames)){const label=element("label",undefined,form);label.className="check";const input=element("input",undefined,label);input.type="checkbox";input.value=permission;input.checked=user.permissions.includes(permission);input.disabled=user.admin;checks.push(input);label.append(document.createTextNode(name));}
   const label=element("label",undefined,form);label.className="check";const active=element("input",undefined,label);active.type="checkbox";active.checked=user.active;label.append(document.createTextNode("Account active"));element("button","Save permissions",form);
-  form.addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/users/${user.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({permissions:checks.filter(input=>input.checked).map(input=>input.value),active:active.checked})});await listEmployees();status.textContent="Permissions updated. Server checks apply immediately.";}catch(error){status.textContent=error.message;}});
+  form.addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request(`/api/users/${user.id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({permissions:checks.filter(input=>input.checked).map(input=>input.value),active:active.checked})});await listEmployees();status.textContent="Permissions updated. Server checks apply immediately.";}catch(error){status.textContent=error.message;}});
 }}
 // Old events store JSON snapshots; display their values without interpreting them as HTML.
 function auditSnapshot(value) {
@@ -441,7 +443,7 @@ function showAuditSnapshot(label, snapshot, parent) {
 
 byId("audit-refresh").addEventListener("click", async (event) => {
   const button = event.currentTarget;
-  const feedback = byId("audit-status");
+  const feedback = feedbackFor(byId("audit-status"));
   const list = byId("audit-list");
   button.disabled = true;
   feedback.textContent = "Loading audit history…";
@@ -465,7 +467,7 @@ byId("audit-refresh").addEventListener("click", async (event) => {
         showAuditSnapshot("After", after, detail);
       }
     }
-    feedback.textContent = rows.length ? "" : "No audit events yet.";
+    feedback.textContent = rows.length ? `${rows.length} audit events loaded.` : "No audit events yet.";
   } catch (error) {
     feedback.textContent = `Could not refresh audit history. ${error.message}`;
   } finally {
@@ -473,16 +475,16 @@ byId("audit-refresh").addEventListener("click", async (event) => {
   }
 });
 async function listBackups(){byId("backup-list").replaceChildren();for(const row of await request("/api/backups"))element("li",`${row.name} · ${row.size} bytes`,byId("backup-list"));}
-byId("backup-create").addEventListener("click",async()=>{try{await request("/api/backups",{method:"POST"});await listBackups();status.textContent="Verified backup created.";}catch(error){status.textContent=error.message;}});
+byId("backup-create").addEventListener("click",async()=>{const status=feedbackFor(byId("backup-create"));try{await request("/api/backups",{method:"POST"});await listBackups();status.textContent="Verified backup created.";}catch(error){status.textContent=error.message;}});
 async function loadSettings(){const settings=await request("/api/settings");byId("company-name").value=settings.company_name||"";byId("company-offset").value=settings.utc_offset_minutes??180;byId("company-date-format").value=settings.date_format||"YYYY-MM-DD";byId("company-time-format").value=settings.time_format||"24h";byId("backup-locations").value=(settings.backup_locations||[]).join("\n");byId("backup-status").textContent=settings.backup_status||"Automatic backup check pending.";byId("closed-months").replaceChildren();for(const month of await request("/api/months"))element("li",`${month.month} · Closed`,byId("closed-months"));}
-byId("settings-form").addEventListener("submit",async(event)=>{event.preventDefault();try{await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({company_name:byId("company-name").value,utc_offset_minutes:Number(byId("company-offset").value),date_format:byId("company-date-format").value,time_format:byId("company-time-format").value,backup_locations:byId("backup-locations").value.split("\n").map(value=>value.trim()).filter(Boolean)})});await loadWorkspace();status.textContent="Company settings saved.";}catch(error){status.textContent=error.message;}});
+byId("settings-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({company_name:byId("company-name").value,utc_offset_minutes:Number(byId("company-offset").value),date_format:byId("company-date-format").value,time_format:byId("company-time-format").value,backup_locations:byId("backup-locations").value.split("\n").map(value=>value.trim()).filter(Boolean)})});await loadWorkspace();status.textContent="Company settings saved.";}catch(error){status.textContent=error.message;}});
 function formatBusinessDate(value){const [year,month,day]=value.split("-");return companyPreferences.date_format==="DD/MM/YYYY"?`${day}/${month}/${year}`:companyPreferences.date_format==="MM/DD/YYYY"?`${month}/${day}/${year}`:value;}
-for(const [id,closed]of [["close-month",true],["open-month",false]])byId(id).addEventListener("click",async()=>{if (!byId("closing-month").reportValidity()) return;try{await request(`/api/months/${byId("closing-month").value}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({closed})});await loadSettings();status.textContent=closed?"Month closed.":"Month reopened.";}catch(error){status.textContent=error.message;}});
-byId("sync-now").addEventListener("click",async()=>{await syncPending();await loadWorkspace();await loadProducts();});
-byId("server-holds-refresh").addEventListener("click",async()=>{try{byId("server-holds").replaceChildren();for(const held of await request("/api/sync/holds")){
+for(const [id,closed]of [["close-month",true],["open-month",false]])byId(id).addEventListener("click",async()=>{const status=feedbackFor(byId(id));if (!byId("closing-month").reportValidity()) return;try{await request(`/api/months/${byId("closing-month").value}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({closed})});await loadSettings();status.textContent=closed?"Month closed.":"Month reopened.";}catch(error){status.textContent=error.message;}});
+byId("sync-now").addEventListener("click",async()=>{const status=feedbackFor(byId("sync-now"));try{await syncPending();await loadWorkspace();await loadProducts();status.textContent=byId("sync-status").textContent;}catch(error){status.textContent=error.message;}});
+byId("server-holds-refresh").addEventListener("click",async()=>{const status=feedbackFor(byId("server-holds-refresh"));try{byId("server-holds").replaceChildren();for(const held of await request("/api/sync/holds")){
   const original=JSON.parse(held.payload_json),item=element("li",undefined,byId("server-holds"));element("p",`${original.kind} ${original.quantity} · ${original.effective_date} · ${held.reason}`,item);
   const form=element("form",undefined,item),fields={};for(const [key,label,type]of [["quantity","Reviewed quantity","text"],["effective_date","Reviewed date","date"],["notes","Review notes","text"]]){const text=element("label",label,form),input=element("input",undefined,form);input.id=`held-${held.id}-${key}`;text.htmlFor=input.id;input.type=type;input.value=original[key]||"";input.required=key!=="notes";fields[key]=input;}
-  const button=element("button","Apply reviewed replacement",form),identity=inventoryUUID();form.addEventListener("submit",async(event)=>{event.preventDefault();button.disabled=true;try{
+  const button=element("button","Apply reviewed replacement",form),identity=inventoryUUID();form.addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);button.disabled=true;try{
     const results=await request("/api/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({operations:[{id:identity,product_id:original.product_id,kind:original.kind,quantity:fields.quantity.value,effective_date:fields.effective_date.value,notes:fields.notes.value,resolves_id:held.id,depends_on:original.depends_on||[]}]})});
     status.textContent=results[0].status==="saved"?"Held entry resolved and recorded in audit history.":results[0].reason;await loadWorkspace();
   }catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
@@ -539,22 +541,22 @@ function editDailyCell(product,date,kind,entries,total){const target=byId("month
   element("p","Choose individual corrections below, or change the daily total. Decreases reduce the newest entries first and preserve all before/after history.",target);
   for(const entry of entries)if(permitted("correct"))target.append(correctionForm(entry,async()=>{catalog=await request("/api/catalog");showMonth();target.replaceChildren();}));
   if(permitted("correct")){const form=element("form",undefined,target),label=element("label","New daily total",form),input=element("input",undefined,form);input.id="daily-new-total";label.htmlFor=input.id;input.value=minorText(total,product.precision);input.inputMode="decimal";input.required=true;const button=element("button","Apply total with recorded corrections",form),identity=inventoryUUID();
-    form.addEventListener("submit",async(event)=>{event.preventDefault();button.disabled=true;try{await request(`/api/products/${product.id}/daily-total`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:identity,kind,effective_date:date,quantity:input.value,expected_entries:Object.fromEntries(entries.map(entry=>[entry.id,entry.revision]))})});catalog=await request("/api/catalog");showMonth();target.replaceChildren();status.textContent="Daily total updated with preserved audit history.";}catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
+    form.addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);button.disabled=true;try{await request(`/api/products/${product.id}/daily-total`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:identity,kind,effective_date:date,quantity:input.value,expected_entries:Object.fromEntries(entries.map(entry=>[entry.id,entry.revision]))})});catalog=await request("/api/catalog");showMonth();target.replaceChildren();status.textContent="Daily total updated with preserved audit history.";}catch(error){status.textContent=error.message;}finally{button.disabled=false;}});
   }else element("p","Your account can view this cell. Correction permission is required to change it.",target);
   target.scrollIntoView();
 }
-byId("monthly-refresh").addEventListener("click",async()=>{if (!byId("monthly-period").reportValidity()) return;catalog=await request("/api/catalog");showMonth();});
+byId("monthly-refresh").addEventListener("click",async()=>{const status=feedbackFor(byId("monthly-refresh"));if (!byId("monthly-period").reportValidity()) return;try{catalog=await request("/api/catalog");showMonth();status.textContent="Monthly inventory refreshed.";}catch(error){status.textContent=error.message;}});
 
-byId("category-create-form").addEventListener("submit",async(event)=>{event.preventDefault();try{await request("/api/category-management",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("new-category-name").value,position:categories.length})});await initialize();await loadWorkspace();status.textContent="Category added.";}catch(error){status.textContent=error.message;}});
+byId("category-create-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/category-management",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("new-category-name").value,position:categories.length})});await initialize();await loadWorkspace();status.textContent="Category added.";}catch(error){status.textContent=error.message;}});
 async function listCategories(){byId("category-management").replaceChildren();for(const category of await request("/api/category-management")){const row=element("li",undefined,byId("category-management")),form=element("form",undefined,row),label=element("label","Category name",form),name=element("input",undefined,form);name.id=`category-name-${category.id}`;label.htmlFor=name.id;name.value=category.name;name.required=true;name.maxLength=120;
   const orderLabel=element("label","Display order",form),order=element("input",undefined,form);order.id=`category-order-${category.id}`;orderLabel.htmlFor=order.id;order.type="number";order.min="0";order.value=category.position;
   const archiveLabel=element("label",undefined,form);archiveLabel.className="check";const archived=element("input",undefined,archiveLabel);archived.type="checkbox";archived.checked=!!category.archived;archiveLabel.append(document.createTextNode("Archived (preserve history)"));element("button","Save category",form);
-  form.addEventListener("submit",async(event)=>{event.preventDefault();try{await request(`/api/category-management/${encodeURIComponent(category.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name.value,position:Number(order.value),archived:archived.checked})});await initialize();await loadWorkspace();status.textContent="Category saved; stock history retained.";}catch(error){status.textContent=error.message;}});
+  form.addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request(`/api/category-management/${encodeURIComponent(category.id)}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name.value,position:Number(order.value),archived:archived.checked})});await initialize();await loadWorkspace();status.textContent="Category saved; stock history retained.";}catch(error){status.textContent=error.message;}});
 }}
 
 let importRows=[];let importChoices=[];let importOperation=inventoryUUID();
-byId("import-preview-form").addEventListener("submit",async(event)=>{event.preventDefault();
-  const feedback = byId("import-feedback"), button = event.submitter;
+byId("import-preview-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);
+  const feedback = feedbackFor(byId("import-feedback")), button = event.submitter;
   button.disabled = true;
   byId("import-apply-form").hidden = true;
   feedback.textContent = "Reading file…";
@@ -571,13 +573,13 @@ byId("import-preview-form").addEventListener("submit",async(event)=>{event.preve
     element("p",`Opening: ${row.opening||"not imported"}; Code: ${row.code||"none"}`,box);importChoices.push({select,unit});
   }byId("import-apply-form").hidden=false;feedback.textContent=`Preview ready: ${importRows.length} rows. No inventory changed.`;
 }catch(error){feedback.textContent=error.message;}finally{button.disabled=false;}});
-byId("import-apply-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const rows=importRows.map((row,index)=>{const choice=importChoices[index];return {...row,unit:choice.unit.value,action:["create","skip"].includes(choice.select.value)?choice.select.value:"link",target_id:["create","skip"].includes(choice.select.value)?null:choice.select.value};});
+byId("import-apply-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{const rows=importRows.map((row,index)=>{const choice=importChoices[index];return {...row,unit:choice.unit.value,action:["create","skip"].includes(choice.select.value)?choice.select.value:"link",target_id:["create","skip"].includes(choice.select.value)?null:choice.select.value};});
   await request("/api/import/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:importOperation,category_id:byId("import-category").value,date:byId("import-date").value,rows})});
-  byId("import-apply-form").hidden=true;await loadWorkspace();await loadProducts();byId("import-feedback").textContent="Reviewed import applied with a pre-import backup.";
-}catch(error){byId("import-feedback").textContent=error.message;}});
+  byId("import-apply-form").hidden=true;await loadWorkspace();await loadProducts();status.textContent="Reviewed import applied with a pre-import backup.";
+}catch(error){status.textContent=error.message;}});
 
 let templateData="";let templateControls=[];
-byId("template-inspect-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const file=byId("template-file").files[0];if(file.size>2000000)throw new Error("Use a template under 2 MB.");const bytes=new Uint8Array(await file.arrayBuffer());let binary="";for(const byte of bytes)binary+=String.fromCharCode(byte);templateData=btoa(binary);
+byId("template-inspect-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{const file=byId("template-file").files[0];if(file.size>2000000)throw new Error("Use a template under 2 MB.");const bytes=new Uint8Array(await file.arrayBuffer());let binary="";for(const byte of bytes)binary+=String.fromCharCode(byte);templateData=btoa(binary);
   const layout=await request("/api/templates/inspect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data:templateData})});
   table(["Row","First worksheet sample"],layout.sample.map((row,index)=>[index+1,row.join(" | ")]),byId("template-sample"));
   byId("template-name").value=file.name;byId("template-mapping").replaceChildren();templateControls=[];
@@ -595,7 +597,7 @@ byId("template-inspect-form").addEventListener("submit",async(event)=>{event.pre
     templateControls.push({category,fields});
   }byId("template-save-form").hidden=false;status.textContent="Template read locally. Review worksheet ranges and opening-stock meaning before saving.";
 }catch(error){status.textContent=error.message;}});
-byId("template-save-form").addEventListener("submit",async(event)=>{event.preventDefault();try{const mapping=templateControls.filter(row=>row.fields.sheet.value).map(({category,fields})=>({category_id:category.id,sheet:fields.sheet.value,start_row:Number(fields.start_row.value),end_row:Number(fields.end_row.value),opening_mode:fields.opening_mode.value,period_style:"company",title_cell:fields.title_cell.value.trim().toUpperCase(),period_cell:fields.period_cell.value.trim().toUpperCase(),issue_period_cell:fields.issue_period_cell.value.trim().toUpperCase(),columns:Object.fromEntries(Object.entries(fields).filter(([key,value])=>!["sheet","start_row","end_row","opening_mode","title_cell","period_cell","issue_period_cell"].includes(key)&&value.value.trim()).map(([key,value])=>[key,value.value.trim().toUpperCase()]))}));
+byId("template-save-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{const mapping=templateControls.filter(row=>row.fields.sheet.value).map(({category,fields})=>({category_id:category.id,sheet:fields.sheet.value,start_row:Number(fields.start_row.value),end_row:Number(fields.end_row.value),opening_mode:fields.opening_mode.value,period_style:"company",title_cell:fields.title_cell.value.trim().toUpperCase(),period_cell:fields.period_cell.value.trim().toUpperCase(),issue_period_cell:fields.issue_period_cell.value.trim().toUpperCase(),columns:Object.fromEntries(Object.entries(fields).filter(([key,value])=>!["sheet","start_row","end_row","opening_mode","title_cell","period_cell","issue_period_cell"].includes(key)&&value.value.trim()).map(([key,value])=>[key,value.value.trim().toUpperCase()]))}));
   await request("/api/templates",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:byId("template-name").value,data:templateData,mapping})});await listReports();status.textContent="Mapped company template saved. Existing report versions can now use it.";
 }catch(error){status.textContent=error.message;}});
 
