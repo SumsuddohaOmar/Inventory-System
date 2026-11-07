@@ -125,7 +125,28 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(stock.StockError):workflows.finalize_draft(self.path,identity)
         self.assertEqual(stock.get_stock(self.path,self.product["id"])["received"],"0.000")
         self.assertEqual(saved["revision"],1)
-        with self.assertRaises(stock.StockError):workflows.save_draft(self.path,identity,rows,0)
+        changed=[{**rows[0],"quantity":"3"}]
+        with self.assertRaises(stock.StockError):workflows.save_draft(self.path,identity,changed,0)
+
+    def test_draft_retry_after_lost_response_ignores_json_field_order(self):
+        rows=[dict(product_id=self.product["id"],**self.entry("receive","2"))]
+        identity=str(uuid4())
+        first=workflows.save_draft(self.path,identity,rows,0)
+        reordered=[dict(reversed(list(rows[0].items())))]
+        self.assertEqual(workflows.save_draft(self.path,identity,reordered,0),first)
+        self.assertEqual(workflows.save_draft(self.path,identity,rows,first["revision"]),first)
+        self.assertFalse(stock.get_stock(self.path,self.product["id"])["initialized"])
+
+    def test_draft_retry_never_overwrites_another_devices_edit(self):
+        rows=[dict(product_id=self.product["id"],**self.entry("receive","2"))]
+        identity=str(uuid4());first=workflows.save_draft(self.path,identity,rows,0)
+        other=[{**rows[0],"quantity":"9"}]
+        latest=workflows.save_draft(self.path,identity,other,first["revision"])
+        with self.assertRaises(stock.StockError):workflows.save_draft(self.path,identity,rows,first["revision"])
+        with database.connect(self.path) as connection:
+            saved=connection.execute("SELECT * FROM drafts WHERE id=?",(identity,)).fetchone()
+        self.assertEqual(json.loads(saved["payload_json"]),other)
+        self.assertEqual(saved["revision"],latest["revision"])
 
     def test_finalizing_draft_twice_posts_once(self):
         self.opening()

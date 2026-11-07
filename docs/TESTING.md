@@ -1,5 +1,22 @@
 # Verification record — November 2, 2026
 
+## Mobile bulk draft retry follow-up — November 7, 2026
+
+Draft autosave retries now compare parsed entries rather than JSON key order.
+An identical retry returns the existing revision without changing stock or
+incrementing the draft revision. Different content still requires the current
+revision. Browser recovery remembers its attempted payloads, including restored
+legacy local drafts, and retries changed input only if the server still contains
+one of those known attempts. The recovered revision is checked again on write.
+Unknown edits from another device/tab remain held with local quantities intact.
+
+Two additional workflow tests verify identical/reordered retries and genuine
+cross-device conflict rejection. A phone-sized Chromium regression exercises
+lost responses with and without subsequent edits, restored legacy drafts, slow
+autosaves, independent device edits and shared-storage tab edits through the
+actual bulk form submit handler. The fixture does not contact the live app.
+Real-phone acceptance remains required after an approved deployment.
+
 ## Excel daily connection follow-up — November 6, 2026
 
 The prepared copy passed native Windows Excel refresh/calculation checks using

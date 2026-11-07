@@ -8,6 +8,7 @@ let draftIdentity = inventoryUUID();
 let draftRevision = 0;
 let draftTimer;
 let draftChain = Promise.resolve();
+const draftAttempts = new Map();
 let companyPreferences={date_format:"YYYY-MM-DD",time_format:"24h",utc_offset_minutes:180};
 const byId = (id) => document.getElementById(id);
 const permitted = (permission) => currentUser?.permissions.includes(permission);
@@ -127,33 +128,71 @@ function drawBulkRows() {
 }
 
 function draftRows() {
-  return [...bulkValues].filter(([,value])=>value.quantity.trim()!=="").map(([product_id,value])=>({product_id,id:value.id,kind:byId("bulk-kind").value,
-    effective_date:byId("bulk-date").value,quantity:value.quantity.trim(),notes:[byId("bulk-notes").value,value.notes].filter(Boolean).join(" · ").slice(0,500)}));
+  return draftStateRows({values:[...bulkValues],kind:byId("bulk-kind").value,date:byId("bulk-date").value,notes:byId("bulk-notes").value});
+}
+
+function draftStateRows(value) {
+  return value.values.filter(([,item])=>item.quantity.trim()!=="").map(([product_id,item])=>({product_id,id:item.id,kind:value.kind,
+    effective_date:value.date,quantity:item.quantity.trim(),notes:[value.notes,item.notes].filter(Boolean).join(" · ").slice(0,500)}));
+}
+
+function sameDraftEntries(left,right) {
+  // Field order in JSON is not part of a stock movement. Pydantic and older
+  // browser versions may serialize the same fields in different orders.
+  const fields=["id","product_id","kind","effective_date","quantity","notes"];
+  return Array.isArray(left)&&Array.isArray(right)&&left.length===right.length&&left.every((row,index)=>fields.every(key=>row[key]===right[index][key]));
 }
 
 function scheduleDraft() {clearTimeout(draftTimer);draftTimer=setTimeout(()=>saveDraft().catch(()=>{}),700);}
 
 async function saveDraft() {
   /* Serialize autosaves so response order cannot overwrite a newer revision.
-     Always save locally first, even if Windows cannot currently be reached. */
+     Always save locally first, even if the server cannot currently be reached. */
   draftChain=draftChain.catch(()=>{}).then(async()=>{
     const identity=draftIdentity;
+    const owner=currentUser.id;
+    // Use this tab's loaded/attempted snapshot, not a storage record that
+    // another tab may have just replaced while the user was typing.
+    const previous=draftAttempts.get(identity);
     const value={identity,revision:draftRevision,values:[...bulkValues],category:byId("bulk-category").value,kind:byId("bulk-kind").value,date:byId("bulk-date").value,notes:byId("bulk-notes").value};
-    await localPut("meta",{id:`draft:${currentUser.id}:${identity}`,value});
-    await localPut("meta",{id:`active-draft:${currentUser.id}`,value:identity});
-    const entries=draftRows();
+    // Keep the last attempted payload across reloads, even when the next edit
+    // has already changed the quantity. Never replace an unknown cloud draft.
+    const entries=draftStateRows(value);
+    const priorAttempt=previous?.pendingEntries;
+    value.pendingEntries=entries;
+    value.previousAttempt=priorAttempt;
+    draftAttempts.set(identity,value);
+    await localPut("meta",{id:`draft:${owner}:${identity}`,value});
+    await localPut("meta",{id:`active-draft:${owner}`,value:identity});
     if(!entries.length){byId("draft-status").textContent="Empty draft kept locally.";return;}
     try {
-      const result=await request(`/api/drafts/${identity}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({revision:draftRevision,entries})});
-      if(draftIdentity===identity)draftRevision=result.revision;
+      const result=await request(`/api/drafts/${identity}`,{method:"PUT",headers:{"Content-Type":"application/json","X-Inventory-Owner":owner},body:JSON.stringify({revision:draftRevision,entries})});
+      if(draftIdentity===identity&&currentUser?.id===owner)draftRevision=result.revision;
       value.revision=result.revision;
-      await localPut("meta",{id:`draft:${currentUser.id}:${identity}`,value});
-      byId("draft-status").textContent="Draft saved locally and on Windows. Stock has not changed.";
+      await localPut("meta",{id:`draft:${owner}:${identity}`,value});
+      byId("draft-status").textContent="Draft saved locally and on the server. Stock has not changed.";
     }catch(error){
       // A response can be lost AFTER the server saved a draft. Reconcile an
       // identical server payload rather than trapping it at revision zero.
-      if(error.rejected)try{const versions=await request("/api/drafts");const version=versions.find(row=>row.id===identity&&JSON.stringify(JSON.parse(row.payload_json))===JSON.stringify(entries));if(version){draftRevision=version.revision;value.revision=version.revision;await localPut("meta",{id:`draft:${currentUser.id}:${identity}`,value});return;}}catch{}
-      byId("draft-status").textContent=error.rejected?`Draft kept locally. ${error.message}`:"Draft kept locally; Windows is unreachable.";throw error;}
+      if(error.rejected)try{
+        const versions=await request("/api/drafts");
+        const version=versions.find(row=>row.id===identity);
+        if(version&&currentUser.id===owner&&draftIdentity===identity){
+          const serverEntries=JSON.parse(version.payload_json);
+          if(sameDraftEntries(serverEntries,entries)){
+            draftRevision=version.revision;value.revision=version.revision;
+          }else if([priorAttempt,previous?.previousAttempt].some(attempt=>sameDraftEntries(serverEntries,attempt))){
+            // The cloud contains our known previous attempt. Retry this edit
+            // with the recovered revision; a concurrent edit still rejects it.
+            const result=await request(`/api/drafts/${identity}`,{method:"PUT",headers:{"Content-Type":"application/json","X-Inventory-Owner":owner},body:JSON.stringify({revision:version.revision,entries})});
+            draftRevision=result.revision;value.revision=result.revision;
+          }else throw error;
+          await localPut("meta",{id:`draft:${owner}:${identity}`,value});
+          byId("draft-status").textContent="Draft recovered and saved on the server. Stock has not changed.";
+          return;
+        }
+      }catch{}
+      byId("draft-status").textContent=error.rejected?`Draft kept locally. ${error.message} Use Start another draft to keep this draft and begin a separate entry.`:"Draft kept locally; the server is unreachable.";throw error;}
   });
   return draftChain;
 }
@@ -166,6 +205,7 @@ async function restoreLocalDraft(identity) {
     return;
   }
   draftIdentity=saved.identity;draftRevision=saved.revision;bulkValues=new Map(saved.values);
+  draftAttempts.set(saved.identity,{pendingEntries:saved.pendingEntries||draftStateRows(saved),previousAttempt:saved.previousAttempt});
   byId("bulk-category").value=saved.category;byId("bulk-kind").value=saved.kind;byId("bulk-date").value=saved.date;byId("bulk-notes").value=saved.notes;
 }
 

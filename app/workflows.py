@@ -90,6 +90,12 @@ def save_draft(path, identity, entries, expected_revision):
         if row:
             if row["owner"] != audit.actor.get(): raise stock.StockError("This draft belongs to another account.")
             if row["finalized"]: raise stock.StockError("This draft was already finalized.")
+            # An autosave response can disappear on a mobile connection after
+            # the transaction committed. Retrying identical content is safe;
+            # compare parsed objects, since API validation can reorder fields.
+            # Changed content still needs the current revision below.
+            if json.loads(row["payload_json"]) == entries:
+                return {"id": identity, "revision": row["revision"]}
             if row["revision"] != expected_revision: raise stock.StockError("Draft changed elsewhere. Reload it before editing.")
             connection.execute("UPDATE drafts SET payload_json=?,revision=revision+1 WHERE id=?", (json.dumps(entries), identity))
             revision = row["revision"] + 1
