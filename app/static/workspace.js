@@ -478,6 +478,47 @@ async function listBackups(){byId("backup-list").replaceChildren();for(const row
 byId("backup-create").addEventListener("click",async()=>{const status=feedbackFor(byId("backup-create"));try{await request("/api/backups",{method:"POST"});await listBackups();status.textContent="Verified backup created.";}catch(error){status.textContent=error.message;}});
 async function loadSettings(){const settings=await request("/api/settings");byId("company-name").value=settings.company_name||"";byId("company-offset").value=settings.utc_offset_minutes??180;byId("company-date-format").value=settings.date_format||"YYYY-MM-DD";byId("company-time-format").value=settings.time_format||"24h";byId("backup-locations").value=(settings.backup_locations||[]).join("\n");byId("backup-status").textContent=settings.backup_status||"Automatic backup check pending.";byId("closed-months").replaceChildren();for(const month of await request("/api/months"))element("li",`${month.month} · Closed`,byId("closed-months"));}
 byId("settings-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({company_name:byId("company-name").value,utc_offset_minutes:Number(byId("company-offset").value),date_format:byId("company-date-format").value,time_format:byId("company-time-format").value,backup_locations:byId("backup-locations").value.split("\n").map(value=>value.trim()).filter(Boolean)})});await loadWorkspace();status.textContent="Company settings saved.";}catch(error){status.textContent=error.message;}});
+const hub16Settings = byId("hub16-settings");
+const hub16PolicyForm = byId("hub16-policy-form");
+const hub16PolicyFields = byId("hub16-policy-fields");
+const hub16PolicyStatus = byId("hub16-policy-status");
+
+// Load the last saved selections when opened so defaults never overwrite a
+// policy saved by another authorized user before this section was opened.
+hub16Settings.addEventListener("toggle", async () => {
+  if (!hub16Settings.open) return;
+  hub16PolicyFields.disabled = true;
+  hub16PolicyStatus.textContent = "Loading Hub-16 settings…";
+  try {
+    const settings = await request("/api/settings");
+    for (const select of hub16PolicyForm.querySelectorAll("select")) {
+      select.value = settings.hub16_policy?.[select.name] ?? "";
+    }
+    hub16PolicyFields.disabled = false;
+    hub16PolicyStatus.textContent = "";
+  } catch (error) {
+    hub16PolicyStatus.textContent = error.message;
+  }
+});
+
+hub16PolicyForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const policy = Object.fromEntries(new FormData(hub16PolicyForm));
+  hub16PolicyFields.disabled = true;
+  try {
+    await request("/api/settings", {
+      method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({hub16_policy: policy}),
+    });
+    hub16PolicyStatus.textContent = "Hub-16 settings saved.";
+  } catch (error) {
+    hub16PolicyStatus.textContent = error.message;
+  } finally {
+    hub16PolicyFields.disabled = false;
+  }
+});
+
 function formatBusinessDate(value){const [year,month,day]=value.split("-");return companyPreferences.date_format==="DD/MM/YYYY"?`${day}/${month}/${year}`:companyPreferences.date_format==="MM/DD/YYYY"?`${month}/${day}/${year}`:value;}
 for(const [id,closed]of [["close-month",true],["open-month",false]])byId(id).addEventListener("click",async()=>{const status=feedbackFor(byId(id));if (!byId("closing-month").reportValidity()) return;try{await request(`/api/months/${byId("closing-month").value}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({closed})});await loadSettings();status.textContent=closed?"Month closed.":"Month reopened.";}catch(error){status.textContent=error.message;}});
 byId("sync-now").addEventListener("click",async()=>{const status=feedbackFor(byId("sync-now"));try{await syncPending();await loadWorkspace();await loadProducts();status.textContent=byId("sync-status").textContent;}catch(error){status.textContent=error.message;}});

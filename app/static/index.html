@@ -165,6 +165,38 @@
       <details data-permission="audit"><summary>Audit history</summary><button id="audit-refresh" type="button" class="secondary">Refresh audit history</button><p id="audit-status" role="status"></p><ol id="audit-list"></ol></details>
       <details data-permission="backups"><summary>Backups</summary><p id="backup-status"></p><button id="backup-create" type="button">Create verified backup</button><ul id="backup-list"></ul><p>Restore is provided through the offline maintenance tool so running servers cannot overwrite restored data.</p></details>
       <details data-permission="settings"><summary>Company settings &amp; month closing</summary><form id="settings-form"><label for="company-name">Company name</label><input id="company-name" maxlength="120"><label for="company-offset">Company clock offset from UTC, in minutes (Riyadh = 180)</label><input id="company-offset" type="number" min="-720" max="840" step="15" value="180"><p class="hint">Fixed offsets do not automatically follow daylight-saving changes.</p><label for="company-date-format">Date display</label><select id="company-date-format"><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option></select><label for="company-time-format">Time display</label><select id="company-time-format"><option value="24h">24 hour</option><option value="12h">12 hour</option></select><label for="backup-locations">Extra backup folders (one full path per line)</label><textarea id="backup-locations" rows="3"></textarea><button>Save settings</button></form><label for="closing-month">Month</label><input id="closing-month" type="month"><button id="close-month" type="button" class="secondary">Close month</button> <button id="open-month" type="button" class="secondary">Reopen month</button><ul id="closed-months"></ul></details>
+      <details id="hub16-settings" data-permission="settings">
+        <summary>Hub-16 material request settings</summary>
+        <form id="hub16-policy-form">
+          <fieldset id="hub16-policy-fields" disabled>
+            <legend>Work dates and receiving</legend>
+            <label for="hub16-overnight-date">Night shift after midnight</label>
+            <select id="hub16-overnight-date" name="overnight_date" required>
+              <option value="">Select an option</option>
+              <option value="manual">Choose the work date for each record</option>
+              <option value="shift_start">Use the date the shift started</option>
+              <option value="calendar_date">Use the activity's calendar date</option>
+            </select>
+            <label for="hub16-cross-date-issue">Issuance on a later work date</label>
+            <select id="hub16-cross-date-issue" name="cross_date_issue" required>
+              <option value="">Select an option</option>
+              <option value="manual">Choose the daily MRF for each issuance</option>
+              <option value="issue_date">Use the issuance work date</option>
+              <option value="request_date">Use the original request work date</option>
+            </select>
+            <label for="hub16-receiver">Receiver name and employee ID</label>
+            <select id="hub16-receiver" name="receiver" required>
+              <option value="">Select an option</option>
+              <option value="manual">Enter the actual receiver's details each time</option>
+              <option value="signed_in">Use the signed-in receiver's profile</option>
+              <option value="signed_in_or_delegate">Use the signed-in profile and allow authorized staff to record another collector</option>
+            </select>
+            <button>Save Hub-16 settings</button>
+          </fieldset>
+          <p class="hint">These choices are saved for the upcoming issuance and receiving workflows.</p>
+          <p id="hub16-policy-status" role="status"></p>
+        </form>
+      </details>
     </section>
     </div>
     <!-- Present in the initial DOM so assistive technology can announce updates. -->

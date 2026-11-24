@@ -134,6 +134,20 @@ def register(application, path):
     def require(user, permission):
         if permission not in user["permissions"]: raise HTTPException(403, f"Permission required: {permission}")
 
+    @application.get("/api/mrf/catalog")
+    def material_request_catalog(request: Request):
+        """Expose only the fields needed to choose a product in the portal."""
+        require(request.state.user, "mrf_catalog")
+        # Use the existing active product list and project explicit fields.
+        # The IDs link future request lines to the shared inventory catalog.
+        return {
+            "products": [
+                {field: product[field] for field in ("id", "name", "unit", "category_id")}
+                for product in database.list_products(path)
+            ],
+            "categories": database.list_categories(path),
+        }
+
     @application.post("/api/history-import/inspect")
     def inspect_history(values:dict):
         from app import history_imports
@@ -197,7 +211,9 @@ def register(application, path):
             return JSONResponse(status_code=409, content={"detail": "Pending queues synchronize only with the cloud inventory. Local server data is not a cloud sync target."})
         request.state.user = user
         permissions = {"read"}
-        if route.startswith("/api/excel/"): permissions = {"read","reports"}
+        # A portal-only account can browse the catalog without inventory read access.
+        if route == "/api/mrf/catalog": permissions = {"mrf_catalog"}
+        elif route.startswith("/api/excel/"): permissions = {"read","reports"}
         elif route.startswith("/api/users"): permissions = {"users"}
         elif route.startswith("/api/audit"): permissions = {"audit"}
         elif route.startswith("/api/backups"): permissions = {"backups"}
@@ -636,7 +652,20 @@ def register(application, path):
 
     @application.put("/api/settings")
     def change_settings(values: dict):
-        allowed = {"company_name", "backup_locations", "date_format","time_format","utc_offset_minutes"}
+        # Save these choices as one policy so a later workflow can read a
+        # complete set of rules. Each record will store the resolved selection.
+        if "hub16_policy" in values:
+            policy = values["hub16_policy"]
+            choices = {
+                "overnight_date": ("manual", "shift_start", "calendar_date"),
+                "cross_date_issue": ("manual", "issue_date", "request_date"),
+                "receiver": ("manual", "signed_in", "signed_in_or_delegate"),
+            }
+            if not isinstance(policy, dict) or policy.keys() != choices.keys() or any(
+                policy[key] not in options for key, options in choices.items()
+            ):
+                raise HTTPException(422, "Choose a valid option for all three Hub-16 settings.")
+        allowed = {"company_name", "backup_locations", "date_format","time_format","utc_offset_minutes", "hub16_policy"}
         if set(values) - allowed: raise HTTPException(422, "Unsupported company setting.")
         if "backup_locations" in values and (not isinstance(values["backup_locations"], list) or any(not isinstance(value, str) for value in values["backup_locations"])):
             raise HTTPException(422, "Backup locations must be a list of folder paths.")

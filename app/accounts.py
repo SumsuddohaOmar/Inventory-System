@@ -16,7 +16,7 @@ from app.database import connect
 from app import audit
 
 ITERATIONS = 600_000
-PERMISSIONS = ("read", "products", "receive", "issue", "correct", "reports", "audit", "backups", "settings", "users")
+PERMISSIONS = ("read", "products", "receive", "issue", "correct", "reports", "audit", "backups", "settings", "users", "mrf_catalog")
 
 
 class AccountError(ValueError):
