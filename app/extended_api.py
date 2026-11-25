@@ -138,12 +138,15 @@ def register(application, path):
     def material_request_catalog(request: Request):
         """Expose only the fields needed to choose a product in the portal."""
         require(request.state.user, "mrf_catalog")
+        from app.material_requests import hidden_products
+        with database.connect(path) as connection:
+            hidden = hidden_products(connection)
         # Use the existing active product list and project explicit fields.
         # The IDs link future request lines to the shared inventory catalog.
         return {
             "products": [
                 {field: product[field] for field in ("id", "name", "unit", "category_id")}
-                for product in database.list_products(path)
+                for product in database.list_products(path) if product["id"] not in hidden
             ],
             "categories": database.list_categories(path),
         }
@@ -204,8 +207,14 @@ def register(application, path):
         # shared session cookie. Never post its queue under the new account.
         owner = request.headers.get("x-inventory-owner")
         approval_route = route.startswith("/api/mrf/requests/") and route.endswith("/approval")
-        issue_route = route.startswith("/api/mrf/requests/") and route.endswith(("/issues", "/stock"))
-        if (route == "/api/mrf/requests" or approval_route or issue_route) and not owner:
+        issue_route = route.startswith("/api/mrf/requests/") and route.endswith(("/issues", "/stock", "/pending-action", "/prepare"))
+        receipt_route = route.startswith("/api/mrf/issues/") and route.endswith("/receipt")
+        return_route = route.startswith("/api/mrf/issues/") and route.endswith("/returns")
+        daily_form_route = route.startswith("/api/mrf/daily/")
+        own_requests = route in ("/api/mrf/my-requests", "/api/mrf/my-templates") or (
+            route.startswith("/api/mrf/my-requests/") and route.endswith("/cancel")
+        )
+        if (route == "/api/mrf/requests" or approval_route or issue_route or receipt_route or return_route or daily_form_route or own_requests) and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload the page to confirm the signed-in account."})
         if route in ("/api/sync", "/api/sync/status") and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload this app before synchronizing. The queue owner must be confirmed; existing pending entries are kept."})
@@ -223,6 +232,14 @@ def register(application, path):
             permissions = {"mrf_review", "mrf_approve"}
         elif issue_route:
             permissions = {"mrf_review", "issue"}
+        elif receipt_route:
+            permissions = {"mrf_review", "issue"}
+        elif return_route:
+            permissions = {"mrf_review", "receive"}
+        elif daily_form_route:
+            permissions = {"mrf_review"} if request.method == "GET" else {"mrf_review", "settings"}
+        elif own_requests:
+            permissions = {"mrf_submit", "mrf_catalog"}
         elif route.startswith("/api/excel/"): permissions = {"read","reports"}
         elif route.startswith("/api/users"): permissions = {"users"}
         elif route.startswith("/api/audit"): permissions = {"audit"}
@@ -390,6 +407,8 @@ def register(application, path):
                 if used:
                     raise stock.StockError("This product is referenced by a saved draft or report. Archive it instead.")
             if permanent:
+                if connection.execute("SELECT 1 FROM material_request_issue_lines WHERE product_id=?", (product_id,)).fetchone():
+                    raise stock.StockError("This product has linked material issues. Archive it to keep their stock history.")
                 # Remove movements before the product to satisfy the ledger's foreign key.
                 # The deletion and its audit record commit together.
                 connection.execute("DELETE FROM stock_entries WHERE product_id=?", (product_id,))
@@ -675,8 +694,16 @@ def register(application, path):
                 policy[key] not in options for key, options in choices.items()
             ):
                 raise HTTPException(422, "Choose a valid option for all three Hub-16 settings.")
-        allowed = {"company_name", "backup_locations", "date_format","time_format","utc_offset_minutes", "hub16_policy"}
+        allowed = {"company_name", "backup_locations", "date_format","time_format","utc_offset_minutes", "hub16_policy", "hub16_hidden_products"}
         if set(values) - allowed: raise HTTPException(422, "Unsupported company setting.")
+        if "hub16_hidden_products" in values:
+            hidden = values["hub16_hidden_products"]
+            if not isinstance(hidden, list) or any(not isinstance(item, str) for item in hidden):
+                raise HTTPException(422, "Choose valid products to hide.")
+            try:
+                values["hub16_hidden_products"] = sorted({str(UUID(item)) for item in hidden})
+            except ValueError as error:
+                raise HTTPException(422, "Choose valid products to hide.") from error
         if "backup_locations" in values and (not isinstance(values["backup_locations"], list) or any(not isinstance(value, str) for value in values["backup_locations"])):
             raise HTTPException(422, "Backup locations must be a list of folder paths.")
         if "utc_offset_minutes" in values and (type(values["utc_offset_minutes"]) is not int or not -720<=values["utc_offset_minutes"]<=840):raise HTTPException(422,"UTC offset must be -720 to +840 minutes.")

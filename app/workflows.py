@@ -72,6 +72,8 @@ def correct(path, entry_id, change, connection=None):
         precision = connection.execute("SELECT precision FROM products WHERE id=?", (row["product_id"],)).fetchone()[0]
         amount = stock.to_minor(change["quantity"], precision)
         if row["kind"] != "opening" and amount == 0: raise stock.StockError("Use Void entry to cancel a receipt or issue; quantity must be positive.")
+        from app.material_requests import validate_ledger_correction
+        validate_ledger_correction(connection, entry_id, 0 if change["voided"] else amount, change["effective_date"])
         before = stock.public_entry(row, precision)
         connection.execute("UPDATE stock_entries SET quantity_minor=?,effective_date=?,notes=?,voided=?,revision=revision+1 WHERE id=?",
                            (amount, change["effective_date"], change["notes"], int(change["voided"]), entry_id))

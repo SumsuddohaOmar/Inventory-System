@@ -28,7 +28,26 @@ can record quantities handed out from an approved request. The actual stock
 date is recorded separately from the issuance work date used for MRF
 assignment. Quantities left blank remain pending. Excess issuance requires a
 reason, and all entered quantities must pass normal stock checks before any
-stock changes are saved.
+stock changes are saved. **Issue history** shows receipt confirmation and
+original, adjusted, returned and net quantities. Stock history can correct
+linked movements within the original issue and return limits.
+
+In **Requests → Daily Material Request Form**, select a date to see its
+numbered form grouped by shift. Requests use their work date and issues use
+their assigned MRF date. Staff with settings permission can close or reopen a
+form. An approved request can be marked prepared, or its remaining quantities
+can be closed or transferred to a later date for a new approval.
+
+The portal shows account-scoped request history. Requesters can copy items,
+save named item lists, and edit or cancel requests awaiting approval. An edit
+saves a replacement and keeps the superseded request in history. Settings can
+hide specific products from the requester catalog. Requests can carry an
+urgent flag, a required date, and individual item remarks.
+
+Once the form is open and signed in, submissions and selected storekeeper
+issues can survive a connection drop. The browser stores the payload until
+the server confirms it or reports a validation error. Sign-in and loading
+the request list still require a connection.
 
 Every launch creates its own ignored SQLite file under `data/hub16-samples`.
 The sample inventory has two fictional products with opening stock. The server
@@ -56,9 +75,9 @@ logic and permissions. An isolated PostgreSQL target is needed to verify real
 sync, conflict handling and the hosted backup path.
 
 The existing session cookie identifies employees and store staff. The employee
-catalog uses its own permission. Today it displays the active inventory catalog
-with names, units and category information. Product IDs are included for linking
-request lines. Configurable employee product visibility still needs to be added.
+catalog uses its own permission. It displays names, units and categories for
+active inventory products that administrators allow in the requester catalog.
+Product IDs link request lines to the shared inventory.
 
 The inventory ledger stores exact quantities as integers scaled to each
 product's precision. Its write service can accept an existing database
@@ -66,24 +85,12 @@ connection, so an issuance can write the ledger, request allocation and audit
 event together. The existing retry key and closing rules provide the starting
 point for handling connection loss and concurrent submissions.
 
-## Build and verification order
+## Remaining rollout work
 
-1. Add SQLite and PostgreSQL migrations for request records, lines and employee
-   visibility. Build the employee portal with its own permissions, request cart
-   and history. Verify that submission and preparation leave balances intact.
-2. After the work-date rules are confirmed, add daily MRF numbering, shift
-   grouping, issuance, pending transfers, corrections and returns. Link existing
-   requests during manual issuance and support selective MRF inclusion.
-   Verify concurrent saves, retry keys and a single stock deduction per issuance.
-3. After the receiving policy is confirmed, add collection confirmation and
-   audit the signed-in actor and recorded receiver. Add account-scoped offline
-   queues with explicit pending and conflict states.
-4. Test browser mode and optional installation on iPhone and iPad Safari,
-   macOS Safari and Chrome, Android Chrome, and Windows Edge and Chrome.
-   On each, test a cold offline launch after setup, a queued write through a
-   reload, reconnect with the app open, reconnect after closing it, retry after
-   an interrupted response, expired sessions, account switching and unavailable
-   browser storage. Record results separately for browser and installed modes.
-5. Add Excel and PDF layouts when templates arrive. Verify unified backup and
-   restore in an isolated environment. Review free-tier capacity before the
-   controlled sample-data pilot. Production requires separate approval.
+- Link standalone Inventory issues selectively to a daily MRF. Add combined
+  preparation across requests and employee self-registration with admin approval.
+- Verify offline recovery, sign-in expiry, account switching and installation on
+  iPhone, iPad, macOS, Android and Windows. Verify hosted PostgreSQL migration,
+  backup and restore in an isolated environment.
+- Add the Excel and printable PDF layouts when the templates arrive. Review free
+  tier capacity before the controlled pilot. Production requires separate approval.

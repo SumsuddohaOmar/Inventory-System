@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Hub-16 Material Requests</title>
   <link rel="stylesheet" href="/static/styles.css">
+  <link rel="manifest" href="/static/material-requests.webmanifest">
+  <script src="/static/offline.js" defer></script>
   <script src="/static/material-requests.js" defer></script>
 </head>
 <body>
@@ -23,8 +25,17 @@
       <button>Sign in</button>
     </form>
     <p id="portal-status" role="status"></p>
+    <p id="request-notification" role="status" hidden></p>
+    <details id="request-history" hidden>
+      <summary>Request history</summary>
+      <button id="request-history-refresh" type="button" class="secondary">Refresh history</button>
+      <p id="request-history-status" role="status"></p>
+      <ul id="request-history-results"></ul>
+      <button id="request-history-older" type="button" class="secondary" hidden>Show older requests</button>
+    </details>
     <form id="material-request-form" hidden>
       <h2>New request</h2>
+      <p id="request-edit-status" role="status" hidden>Saving these changes replaces the earlier request.</p>
       <fieldset id="request-fields">
         <legend>Request details</legend>
         <div class="form-grid requester-grid">
@@ -55,9 +66,25 @@
             <p id="request-date-help" class="hint">For a night shift collecting for the next day, choose that next date.</p>
           </div>
         </div>
+        <div class="form-grid">
+          <div><label for="request-priority">Priority</label><select id="request-priority" name="priority">
+            <option value="normal">Normal</option><option value="urgent">Urgent</option>
+          </select></div>
+          <div><label for="request-required-date">Required date (optional)</label><input id="request-required-date" name="required_date" type="date"></div>
+        </div>
         <label for="request-notes">Remarks (optional)</label>
         <textarea id="request-notes" name="notes" maxlength="500" rows="2"></textarea>
         <h3>Items</h3>
+        <details id="request-templates">
+          <summary>Saved item lists</summary>
+          <label for="request-template-list">Saved list</label>
+          <select id="request-template-list"></select>
+          <button id="request-template-add" type="button" class="secondary">Add saved items</button>
+          <label for="request-template-name">Name for current item list</label>
+          <input id="request-template-name" maxlength="80">
+          <button id="request-template-save" type="button" class="secondary">Save or update item list</button>
+          <p id="request-template-status" role="status"></p>
+        </details>
         <p id="request-items-error" class="request-error" role="status" tabindex="-1" hidden></p>
         <p class="hint">Enter quantities for the items you need. You can switch categories and submit all entered items together.</p>
         <div class="form-grid">
@@ -71,6 +98,7 @@
           <ul id="request-selected-items"></ul>
         </details>
         <button type="submit">Submit request</button>
+        <label id="request-duplicate-confirmation" class="check" hidden><input id="request-allow-duplicate" type="checkbox"> Submit these additional quantities anyway</label>
         <p id="request-status" role="status"></p>
       </fieldset>
     </form>
@@ -78,6 +106,7 @@
       <div class="bulk-row">
         <label><strong></strong><small class="hint"></small></label>
         <input type="text" inputmode="decimal" maxlength="40" placeholder="Qty" autocomplete="off">
+        <details><summary>Item remark</summary><label>Remark</label><input class="request-item-remark" maxlength="300"></details>
         <p class="request-error request-row-error" role="status" hidden></p>
       </div>
     </template>

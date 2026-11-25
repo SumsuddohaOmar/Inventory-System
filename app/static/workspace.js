@@ -483,6 +483,62 @@ const hub16Settings = byId("hub16-settings");
 const hub16PolicyForm = byId("hub16-policy-form");
 const hub16PolicyFields = byId("hub16-policy-fields");
 const hub16PolicyStatus = byId("hub16-policy-status");
+const catalogSettings = byId("hub16-catalog-settings");
+const catalogForm = byId("hub16-catalog-form");
+const catalogProducts = byId("hub16-catalog-products");
+const catalogStatus = byId("hub16-catalog-status");
+
+catalogSettings.addEventListener("toggle", async () => {
+  if (!catalogSettings.open) return;
+  const save = catalogForm.querySelector("button");
+  catalogProducts.disabled = save.disabled = true;
+  try {
+    const settings = await request("/api/settings");
+    const hidden = new Set(settings.hub16_hidden_products ?? []);
+    const products = catalog.filter(product => !product.archived);
+    const visibleIds = new Set(products.map(product => product.id));
+    catalogProducts.replaceChildren(catalogProducts.querySelector("legend"));
+    for (const id of hidden) {
+      if (visibleIds.has(id)) continue;
+      const input = element("input", undefined, catalogProducts);
+      input.type = "hidden";
+      input.name = "hidden";
+      input.value = id;
+    }
+    for (const product of products) {
+      const label = element("label", undefined, catalogProducts);
+      label.className = "check";
+      const input = element("input", undefined, label);
+      input.type = "checkbox";
+      input.name = "hidden";
+      input.value = product.id;
+      input.checked = hidden.has(product.id);
+      label.append(document.createTextNode(product.name));
+    }
+    catalogProducts.disabled = save.disabled = false;
+    catalogStatus.textContent = "";
+  } catch (error) {
+    catalogStatus.textContent = error.message;
+  }
+});
+catalogForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const save = catalogForm.querySelector("button");
+  if (save.disabled) return;
+  const hidden = new FormData(catalogForm).getAll("hidden");
+  catalogProducts.disabled = save.disabled = true;
+  try {
+    await request("/api/settings", {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({hub16_hidden_products: hidden}),
+    });
+    catalogStatus.textContent = "Requester catalog visibility saved.";
+  } catch (error) {
+    catalogStatus.textContent = error.message;
+  } finally {
+    catalogProducts.disabled = save.disabled = false;
+  }
+});
 
 const requestInbox = byId("material-request-inbox");
 const refreshRequests = byId("material-request-refresh");
@@ -497,6 +553,73 @@ let selectedRequest = null;
 let olderRequestCursor = null;
 let requestCompanyDate;
 const pendingIssues = new Map();
+const issueDraftPrefix = owner => `hub16-issue:${owner}:`;
+const dailyMrf = byId("daily-mrf");
+const dailyMrfDate = byId("daily-mrf-date");
+const dailyMrfStatus = byId("daily-mrf-status");
+const dailyMrfResults = byId("daily-mrf-results");
+
+dailyMrf.addEventListener("toggle", () => {
+  if (dailyMrf.open && !dailyMrfDate.value) dailyMrfDate.value = requestCompanyDate ?? businessToday();
+});
+
+byId("daily-mrf-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button");
+  const url = `/api/mrf/daily/${encodeURIComponent(dailyMrfDate.value)}`;
+  button.disabled = true;
+  dailyMrfResults.replaceChildren();
+  dailyMrfStatus.textContent = "Loading daily form…";
+  try {
+    const form = await request(byId("daily-mrf-all-products").checked ? url + "?include_all=true" : url);
+    if (!form.number) {
+      dailyMrfStatus.textContent = "No material requests or issues are recorded for this work date.";
+      return;
+    }
+    const showStatus = () => {
+      dailyMrfStatus.textContent = `${form.number} · ${formatBusinessDate(form.work_date)} · ${form.closed ? "Closed" : "Open"}`;
+    };
+    showStatus();
+    for (const shift of ["morning", "afternoon", "night"]) {
+      const rows = form.items.filter(item => item.shift === shift).sort((a, b) => a.product.localeCompare(b.product));
+      element("h4", requestShift({shift}), dailyMrfResults);
+      if (!rows.length) {
+        element("p", "No items recorded.", dailyMrfResults).className = "hint";
+        continue;
+      }
+      const target = element("div", undefined, dailyMrfResults);
+      target.className = "request-items-table";
+      table(["Product", "Requested", "Issued", "Unit"], rows.map(item => [
+        item.product, item.requested, item.issued, item.unit,
+      ]), target);
+    }
+    if (permitted("settings")) {
+      const action = element("button", form.closed ? "Reopen daily form" : "Close daily form", dailyMrfResults);
+      action.type = "button";
+      action.className = "secondary";
+      action.addEventListener("click", async () => {
+        action.disabled = true;
+        try {
+          const result = await request(url, {
+            method: "PUT", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({closed: !form.closed}),
+          });
+          form.closed = result.closed;
+          action.textContent = form.closed ? "Reopen daily form" : "Close daily form";
+          showStatus();
+        } catch (error) {
+          dailyMrfStatus.textContent = error.message;
+        } finally {
+          action.disabled = false;
+        }
+      });
+    }
+  } catch (error) {
+    dailyMrfStatus.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function requestApprovalText(record) {
   if (!record.approved_at) return "Awaiting approval";
@@ -513,9 +636,59 @@ function requestShift(record) {
 }
 
 function requestState(record) {
+  if (record.cancelled_at) return "Cancelled";
+  if (record.pending_action) return record.pending_action === "transfer" ? "Pending transferred" : "Pending closed";
   if (!record.approved_at) return "Awaiting approval";
-  if (!record.issues.length) return "Approved";
+  if (!record.issues.length) return record.prepared_at ? "Prepared" : "Approved";
   return record.items.some(item => Number(item.pending) > 0) ? "Partially issued" : "Issued";
+}
+
+function renderPendingAction(record) {
+  const panel = element("details", undefined, requestDetail);
+  element("summary", "Close or transfer pending quantities", panel);
+  const form = element("form", undefined, panel);
+  const actionLabel = element("label", "Action", form);
+  const action = element("select", undefined, form);
+  action.id = actionLabel.htmlFor = "mrf-pending-action";
+  element("option", "Close pending quantities", action).value = "close";
+  element("option", "Transfer to a later work date", action).value = "transfer";
+  const dateGroup = element("div", undefined, form);
+  dateGroup.hidden = true;
+  const dateLabel = element("label", "New work date", dateGroup);
+  const date = element("input", undefined, dateGroup);
+  date.id = dateLabel.htmlFor = "mrf-transfer-date";
+  date.type = "date";
+  action.addEventListener("change", () => {
+    date.required = action.value === "transfer";
+    dateGroup.hidden = !date.required;
+  });
+  const reasonLabel = element("label", "Reason", form);
+  const reason = element("input", undefined, form);
+  reason.id = reasonLabel.htmlFor = "mrf-pending-reason";
+  reason.required = true;
+  reason.maxLength = 400;
+  element("p", "A transfer creates a separate request for the remaining items. The new request starts awaiting approval.", form).className = "hint";
+  const save = element("button", "Save pending action", form);
+  save.type = "submit";
+  const status = element("p", "", form);
+  status.setAttribute("role", "status");
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    save.disabled = true;
+    const payload = {action: action.value, reason: reason.value};
+    if (date.required) payload.work_date = date.value;
+    try {
+      const result = await request(`/api/mrf/requests/${record.id}/pending-action`, {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload),
+      });
+      Object.assign(record, {pending_action: payload.action, pending_reason: payload.reason, successor_id: result.successor_id});
+      renderRequestList();
+      if (selectedRequest === record.id) renderRequestDetail();
+    } catch (error) {
+      status.textContent = error.message;
+      save.disabled = false;
+    }
+  });
 }
 
 function renderRequestList() {
@@ -529,6 +702,7 @@ function renderRequestList() {
     choice.setAttribute("aria-pressed", String(record.id === selectedRequest));
     element("strong", record.requester_name, choice);
     element("small", `${formatBusinessDate(record.work_date)} · ${requestShift(record)} · ${record.items.length} items`, choice);
+    if (record.priority === "urgent") element("small", "Urgent", choice);
     const badge = element("span", requestState(record), choice);
     badge.className = record.approved_at ? "request-state is-approved" : "request-state";
     choice.addEventListener("click", () => {
@@ -542,6 +716,7 @@ function renderRequestList() {
 
 function renderIssueForm(record) {
   const form = element("form", undefined, requestDetail);
+  form.dataset.issueRequest = record.id;
   const controls = element("fieldset", undefined, form);
   element("legend", "Record issuance", controls);
   const queued = pendingIssues.get(record.id);
@@ -630,6 +805,7 @@ function renderIssueForm(record) {
   controls.disabled = Boolean(queued);
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    if (save.disabled) return;
     const payload = pendingIssues.get(record.id) ?? {
       ...Object.fromEntries(new FormData(form)),
       id: inventoryUUID(),
@@ -641,14 +817,28 @@ function renderIssueForm(record) {
       return;
     }
     pendingIssues.set(record.id, payload);
+    const owner = currentUser.id;
+    const draftKey = `${issueDraftPrefix(owner)}${payload.id}`;
     controls.disabled = save.disabled = true;
     feedback.textContent = "Saving issue…";
     try {
+      const stored = await localPut("meta", {id: draftKey, requestId: record.id, value: payload}).then(() => true, () => false);
+      if (!navigator.onLine) {
+        save.disabled = false;
+        save.textContent = "Retry issue";
+        feedback.textContent = stored
+          ? "Issue saved on this device. Stock updates after it syncs."
+          : "Offline storage is unavailable. Keep this page open and reconnect to retry.";
+        return;
+      }
       await request(`/api/mrf/requests/${record.id}/issues`, {
         method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload),
       });
     } catch (error) {
-      if (error.rejected) pendingIssues.delete(record.id);
+      if (error.rejected && !/sign in|signed-in account/i.test(error.message)) {
+        pendingIssues.delete(record.id);
+        await localDelete("meta", draftKey).catch(() => {});
+      }
       const retry = pendingIssues.has(record.id);
       controls.disabled = retry;
       save.disabled = false;
@@ -667,6 +857,7 @@ function renderIssueForm(record) {
       return;
     }
     pendingIssues.delete(record.id);
+    await localDelete("meta", draftKey).catch(() => {});
     feedback.textContent = "Issue saved. Stock was updated.";
     try {
       const page = await request(`/api/mrf/requests?request_id=${encodeURIComponent(record.id)}`);
@@ -682,6 +873,120 @@ function renderIssueForm(record) {
       void Promise.allSettled([loadProducts(), loadWorkspace()]);
     } catch {
       feedback.textContent = "Issue saved. Refresh requests to reload the updated quantities.";
+    }
+  });
+}
+
+function renderIssueReceipt(issue, target) {
+  const status = element("p", "", target);
+  status.setAttribute("role", "status");
+  const showReceipt = () => {
+    status.textContent = `Received by ${issue.receiver_name} · Employee ID ${issue.receiver_employee_id}`;
+  };
+  if (issue.received_at) {
+    showReceipt();
+    return;
+  }
+  status.textContent = "Awaiting receiving confirmation";
+  if (!permitted("issue")) return;
+  const form = element("form", undefined, target);
+  const fields = element("div", undefined, form);
+  fields.className = "form-grid";
+  for (const [key, label, size] of [
+    ["receiver_name", "Receiver name", 120], ["employee_id", "Receiver employee ID", 80],
+  ]) {
+    const group = element("div", undefined, fields);
+    const caption = element("label", label, group);
+    const input = element("input", undefined, group);
+    input.id = caption.htmlFor = `receipt-${issue.id}-${key}`;
+    input.name = key;
+    input.maxLength = size;
+    input.required = true;
+  }
+  const save = element("button", "Confirm receiving", form);
+  save.type = "submit";
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    save.disabled = true;
+    try {
+      const receipt = await request(`/api/mrf/issues/${issue.id}/receipt`, {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(Object.fromEntries(new FormData(form))),
+      });
+      Object.assign(issue, receipt);
+      showReceipt();
+      form.remove();
+    } catch (error) {
+      status.textContent = error.message;
+      save.disabled = false;
+    }
+  });
+}
+
+function renderIssueReturns(record, issue, target) {
+  const balances = element("div", undefined, target);
+  balances.className = "request-items-table";
+  table(["Product", "Original", "Issued", "Returned", "Net", "Unit"], issue.items.map(item => [
+    item.product, item.original, item.issued, item.returned, item.net, item.unit,
+  ]), balances);
+  const returnable = issue.items.filter(item => Number(item.net) > 0);
+  if (!permitted("receive") || !returnable.length) return;
+  const panel = element("details", undefined, target);
+  element("summary", "Record a material return", panel);
+  const form = element("form", undefined, panel);
+  const inputs = element("fieldset", undefined, form);
+  element("legend", "Return details", inputs);
+  const productLabel = element("label", "Product", inputs);
+  const product = element("select", undefined, inputs);
+  product.name = "product_id";
+  product.id = productLabel.htmlFor = `return-${issue.id}-product`;
+  for (const item of returnable) element("option", `${item.product} · ${item.net} ${item.unit} returnable`, product).value = item.product_id;
+  for (const [name, label, type, value, length] of [
+    ["stock_date", "Return stock date", "date", requestCompanyDate ?? businessToday(), null],
+    ["quantity", "Quantity returned", "text", "", 40],
+    ["reason", "Return reason", "text", "", 400],
+  ]) {
+    const caption = element("label", label, inputs);
+    const field = element("input", undefined, inputs);
+    field.id = caption.htmlFor = `return-${issue.id}-${name}`;
+    field.type = type;
+    field.name = name;
+    field.value = value;
+    field.required = true;
+    if (length) field.maxLength = length;
+    if (name === "quantity") field.inputMode = "decimal";
+  }
+  const save = element("button", "Save return", form);
+  save.type = "submit";
+  const feedback = element("p", "", form);
+  feedback.setAttribute("role", "status");
+  let pendingReturn;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    pendingReturn ??= {...Object.fromEntries(new FormData(form)), id: inventoryUUID()};
+    inputs.disabled = save.disabled = true;
+    try {
+      await request(`/api/mrf/issues/${issue.id}/returns`, {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(pendingReturn),
+      });
+    } catch (error) {
+      if (error.rejected) pendingReturn = undefined;
+      inputs.disabled = Boolean(pendingReturn);
+      save.disabled = false;
+      feedback.textContent = pendingReturn ? "The save was unconfirmed. Submit again to retry the same return." : error.message;
+      return;
+    }
+    feedback.textContent = "Return saved. Refresh requests to see the updated quantities.";
+    try {
+      const page = await request(`/api/mrf/requests?request_id=${encodeURIComponent(record.id)}`);
+      if (page.requests.length) requestRecords = requestRecords.map(entry => entry.id === record.id ? page.requests[0] : entry);
+      if (selectedRequest === record.id) {
+        renderRequestDetail();
+        inboxStatus.textContent = "Return saved. Stock was updated.";
+      }
+      void Promise.allSettled([loadProducts(), loadWorkspace()]);
+    } catch {
+      // The return already committed, so retain the saved message above.
     }
   });
 }
@@ -707,18 +1012,19 @@ function renderRequestDetail() {
     element("dd", value, pair);
   }
   if (record.notes) element("p", `Remarks: ${record.notes}`, requestDetail);
+  if (record.required_date) element("p", `Required by ${formatBusinessDate(record.required_date)}`, requestDetail);
   element("h4", "Requested items", requestDetail);
   const itemTable = element("div", undefined, requestDetail);
   itemTable.className = "request-items-table";
   itemTable.tabIndex = 0;
   itemTable.setAttribute("role", "region");
   itemTable.setAttribute("aria-label", "Requested items table");
-  table(["Product", "Requested", "Issued", "Pending", "Unit"], record.items.map(item => [
-    item.product, item.quantity, item.issued, item.pending, item.unit,
+  table(["Product", "Requested", "Issued", record.pending_action ? "Unissued" : "Pending", "Unit"], record.items.map(item => [
+    item.remarks ? `${item.product} · ${item.remarks}` : item.product, item.quantity, item.issued, item.pending, item.unit,
   ]), itemTable);
-  const approvalStatus = element("p", requestApprovalText(record), requestDetail);
+  const approvalStatus = element("p", record.cancelled_at ? "Cancelled by requester" : requestApprovalText(record), requestDetail);
   approvalStatus.setAttribute("role", "status");
-  if (!record.approved_at && permitted("mrf_approve")) {
+  if (!record.cancelled_at && !record.approved_at && permitted("mrf_approve")) {
     const approve = element("button", "Approve request", requestDetail);
     approve.type = "button";
     approve.addEventListener("click", async () => {
@@ -745,9 +1051,35 @@ function renderRequestDetail() {
     for (const issue of record.issues) {
       const entry = element("li", `${issue.issuer_name} · Stock date ${formatBusinessDate(issue.stock_date)} · MRF work date ${formatBusinessDate(issue.mrf_date)}`, list);
       if (issue.excess_reason) element("p", `Excess reason: ${issue.excess_reason}`, entry);
+      renderIssueReceipt(issue, entry);
+      renderIssueReturns(record, issue, entry);
     }
   }
-  if (record.approved_at && permitted("issue")) renderIssueForm(record);
+  if (record.pending_action) {
+    element("p", `${requestState(record)} · ${record.pending_reason}`, requestDetail);
+    if (record.successor_id) element("p", `Transferred request: ${record.successor_id}`, requestDetail).className = "hint";
+  } else if (record.approved_at && permitted("issue")) {
+    if (!record.prepared_at && !record.issues.length) {
+      const prepare = element("button", "Mark as prepared", requestDetail);
+      prepare.type = "button";
+      prepare.className = "secondary";
+      prepare.addEventListener("click", async () => {
+        prepare.disabled = true;
+        try {
+          Object.assign(record, await request(`/api/mrf/requests/${record.id}/prepare`, {method: "POST"}));
+          renderRequestList();
+          if (selectedRequest === record.id) renderRequestDetail();
+        } catch (error) {
+          approvalStatus.textContent = error.message;
+          prepare.disabled = false;
+        }
+      });
+    } else if (record.prepared_at) {
+      element("p", "Marked as prepared", requestDetail).className = "hint";
+    }
+    renderIssueForm(record);
+    if (record.items.some(item => Number(item.pending) > 0)) renderPendingAction(record);
+  }
   element("p", `Reference: ${record.id}`, requestDetail).className = "hint";
 }
 
@@ -757,10 +1089,20 @@ async function loadSubmittedRequests(before = null) {
   olderRequests.disabled = true;
   inboxStatus.textContent = "Loading requests…";
   try {
+    const owner = currentUser.id;
     const query = before ? `?before=${encodeURIComponent(before)}` : "";
     // The existing request helper confirms the signed-in account. This route
     // is online-only and outside the browser's offline cache allowlist.
     const page = await request(`/api/mrf/requests${query}`);
+    if (currentUser?.id !== owner) return;
+    if (permitted("issue")) {
+      const drafts = await localAll("meta").catch(() => []);
+      for (const draft of drafts) {
+        if (draft.id.startsWith(issueDraftPrefix(owner)) && !pendingIssues.has(draft.requestId)) {
+          pendingIssues.set(draft.requestId, draft.value);
+        }
+      }
+    }
     requestCompanyDate = page.company_date;
     requestRecords = before ? [...requestRecords, ...page.requests] : page.requests;
     if (!requestRecords.some(record => record.id === selectedRequest)) selectedRequest = null;
@@ -778,6 +1120,12 @@ async function loadSubmittedRequests(before = null) {
     olderRequests.disabled = false;
   }
 }
+
+window.addEventListener("online", () => {
+  if (permitted("issue") && pendingIssues.has(selectedRequest)) {
+    requestDetail.querySelector("form[data-issue-request]")?.requestSubmit();
+  }
+});
 
 requestBack.addEventListener("click", () => {
   const previous = selectedRequest;

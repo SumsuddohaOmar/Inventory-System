@@ -1,0 +1,11 @@
+{
+  "id": "/material-requests",
+  "name": "Hub-16 Material Requests",
+  "short_name": "Hub-16 Requests",
+  "start_url": "/material-requests",
+  "scope": "/material-requests",
+  "display": "standalone",
+  "background_color": "#f3f6f2",
+  "theme_color": "#17543e",
+  "icons": [{"src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"}]
+}

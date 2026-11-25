@@ -116,11 +116,23 @@
     <div data-screen="requests" hidden>
       <section class="workspace-section" aria-labelledby="material-requests-heading">
         <h2 id="material-requests-heading">Material requests</h2>
+        <details id="daily-mrf">
+          <summary>Daily Material Request Form</summary>
+          <form id="daily-mrf-form">
+            <label for="daily-mrf-date">Work date</label>
+            <input id="daily-mrf-date" type="date" required>
+            <label class="check"><input id="daily-mrf-all-products" type="checkbox"> Show all active products</label>
+            <button type="submit" class="secondary">View daily form</button>
+          </form>
+          <p id="daily-mrf-status" role="status"></p>
+          <div id="daily-mrf-results"></div>
+        </details>
         <div id="material-request-inbox" class="request-inbox">
           <section class="request-panel request-list-panel" aria-label="Submitted requests">
             <div class="request-panel-header">
               <h3>Submitted requests</h3>
               <button id="material-request-refresh" type="button" class="secondary">Refresh</button>
+              <a href="/material-requests" data-permission="mrf_submit" hidden>Enter a walk-in request</a>
             </div>
             <p id="material-request-inbox-status" class="hint" role="status"></p>
             <ul id="material-request-results" class="request-results"></ul>
@@ -216,8 +228,15 @@
             </select>
             <button>Save Hub-16 settings</button>
           </fieldset>
-          <p class="hint">These choices are saved for the upcoming issuance and receiving workflows.</p>
           <p id="hub16-policy-status" role="status"></p>
+        </form>
+      </details>
+      <details id="hub16-catalog-settings" data-permission="settings" hidden>
+        <summary>Requester catalog visibility</summary>
+        <form id="hub16-catalog-form">
+          <fieldset id="hub16-catalog-products" disabled><legend>Hide selected products from requesters</legend></fieldset>
+          <button type="submit" class="secondary" disabled>Save visibility</button>
+          <p id="hub16-catalog-status" role="status"></p>
         </form>
       </details>
     </section>

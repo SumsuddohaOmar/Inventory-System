@@ -101,6 +101,7 @@ def create_app(database_path: Path | None = None) -> FastAPI:
                 material_requests.initialize(connection)
                 material_requests.initialize_approvals(connection, postgres=True)
                 material_requests.initialize_issues(connection)
+                material_requests.initialize_handover(connection, postgres=True)
             yield
             return
         database.initialize(path)
