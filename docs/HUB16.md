@@ -16,6 +16,11 @@ account and the requester name and employee ID entered on the form. Choose the
 work date explicitly for all shifts in this first stage. An evening collection
 for the following day should use that following day's date.
 
+Administrators can open **Administration → Submitted material requests** to
+review each submission and its complete item list. Storekeepers can use the
+same list with **View inventory** and **Review submitted material requests**.
+The list displays requests newest first and can load older submissions.
+
 Every launch creates its own ignored SQLite file under `data/hub16-samples`.
 The sample inventory has two fictional products with opening stock. The server
 accepts connections from this computer only, and backups generated during a

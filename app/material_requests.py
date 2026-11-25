@@ -94,6 +94,42 @@ def submit(path, account_id: str, values: MaterialRequest):
 
 
 def register(application, path):
+    @application.get("/api/mrf/requests")
+    def submitted_requests(before: UUID | None = None):
+        # Page by the last displayed record so new submissions do not shift
+        # the older pages while a storekeeper is reviewing them.
+        with database.connect(path) as connection:
+            where, parameters = "", ()
+            if before is not None:
+                cursor = connection.execute(
+                    "SELECT id, submitted_at FROM material_requests WHERE id=?", (str(before),)
+                ).fetchone()
+                if cursor is None:
+                    raise HTTPException(404, "This request page is unavailable. Refresh the list.")
+                where = "WHERE submitted_at < ? OR (submitted_at = ? AND id < ?)"
+                parameters = (cursor["submitted_at"], cursor["submitted_at"], cursor["id"])
+            rows = connection.execute(
+                """SELECT id, requester_name, employee_id, shift, work_date, notes, submitted_at
+                   FROM material_requests """ + where + " ORDER BY submitted_at DESC, id DESC LIMIT 26",
+                parameters,
+            ).fetchall()
+            page = {row["id"]: {**dict(row), "items": []} for row in rows[:25]}
+            if page:
+                # The interpolated text contains only placeholders. Each ID
+                # is bound separately, and one query loads the entire page.
+                placeholders = ",".join("?" for _ in page)
+                for line in connection.execute(
+                    """SELECT request_id, product_name, unit, quantity_minor, precision
+                       FROM material_request_lines WHERE request_id IN (""" + placeholders +
+                    ") ORDER BY product_name, product_id",
+                    tuple(page),
+                ).fetchall():
+                    page[line["request_id"]]["items"].append({
+                        "product": line["product_name"], "unit": line["unit"],
+                        "quantity": stock.display(line["quantity_minor"], line["precision"]),
+                    })
+        return {"requests": list(page.values()), "next": rows[24]["id"] if len(rows) > 25 else None}
+
     @application.post("/api/mrf/requests", status_code=201)
     def create_request(values: MaterialRequest, request: Request):
         return submit(path, request.state.user["id"], values)

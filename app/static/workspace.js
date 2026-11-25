@@ -378,7 +378,7 @@ byId("safe-delete-product").addEventListener("click", async () => {
   }
 });
 
-const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts",mrf_catalog:"View material request catalog",mrf_submit:"Submit material requests"};
+const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts",mrf_catalog:"View material request catalog",mrf_submit:"Submit material requests",mrf_review:"Review submitted material requests"};
 for(const [permission,name]of Object.entries(permissionNames)){const label=element("label",undefined,byId("employee-permissions"));label.className="check";const input=element("input",undefined,label);input.type="checkbox";input.value=permission;input.checked=permission==="read";label.append(document.createTextNode(name));}
 byId("employee-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:byId("employee-name").value,password:byId("employee-password").value,permissions:[...byId("employee-permissions").querySelectorAll("input:checked")].map(input=>input.value)})});byId("employee-password").value="";await listEmployees();status.textContent="Employee created.";}catch(error){status.textContent=error.message;}});
 async function listEmployees(){byId("employee-list").replaceChildren();for(const user of await request("/api/users")){const row=element("li",undefined,byId("employee-list"));element("strong",`${user.username}${user.admin?" · Administrator":""}`,row);const form=element("form",undefined,row),checks=[];
@@ -482,6 +482,57 @@ const hub16Settings = byId("hub16-settings");
 const hub16PolicyForm = byId("hub16-policy-form");
 const hub16PolicyFields = byId("hub16-policy-fields");
 const hub16PolicyStatus = byId("hub16-policy-status");
+
+const requestInbox = byId("material-request-inbox");
+const refreshRequests = byId("material-request-refresh");
+const olderRequests = byId("material-request-older");
+const requestResults = byId("material-request-results");
+const inboxStatus = byId("material-request-inbox-status");
+let olderRequestCursor = null;
+
+async function loadSubmittedRequests(before = null) {
+  if (refreshRequests.disabled || !permitted("mrf_review")) return;
+  refreshRequests.disabled = true;
+  olderRequests.disabled = true;
+  inboxStatus.textContent = "Loading requests…";
+  try {
+    const query = before ? `?before=${encodeURIComponent(before)}` : "";
+    // The existing request helper confirms the signed-in account. This route
+    // is online-only and outside the browser's offline cache allowlist.
+    const page = await request(`/api/mrf/requests${query}`);
+    if (!before) requestResults.replaceChildren();
+    for (const record of page.requests) {
+      const card = element("details", undefined, requestResults);
+      const shift = record.shift[0].toUpperCase() + record.shift.slice(1);
+      element("summary", `${formatBusinessDate(record.work_date)} · ${shift} · ${record.requester_name}`, card);
+      element("p", `Employee ID: ${record.employee_id}`, card);
+      element("p", `Reference: ${record.id}`, card).className = "hint";
+      if (record.notes) element("p", `Remarks: ${record.notes}`, card);
+      const list = element("ul", undefined, card);
+      for (const item of record.items) {
+        element("li", `${item.product} — ${item.quantity} ${item.unit}`, list);
+      }
+    }
+    olderRequestCursor = page.next;
+    olderRequests.hidden = !olderRequestCursor;
+    inboxStatus.textContent = requestResults.childElementCount
+      ? `${requestResults.childElementCount} requests shown.`
+      : "No material requests have been submitted.";
+  } catch (error) {
+    inboxStatus.textContent = error.message;
+  } finally {
+    refreshRequests.disabled = false;
+    olderRequests.disabled = false;
+  }
+}
+
+requestInbox.addEventListener("toggle", () => {
+  if (requestInbox.open) void loadSubmittedRequests();
+});
+refreshRequests.addEventListener("click", () => loadSubmittedRequests());
+olderRequests.addEventListener("click", () => {
+  if (olderRequestCursor) void loadSubmittedRequests(olderRequestCursor);
+});
 
 // Load the last saved selections when opened so defaults never overwrite a
 // policy saved by another authorized user before this section was opened.

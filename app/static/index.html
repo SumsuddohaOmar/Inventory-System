@@ -114,6 +114,13 @@
     </div>
     <div data-screen="settings" hidden>
     <section id="admin-section" class="workspace-section" aria-labelledby="admin-heading"><h2 id="admin-heading">Administration</h2>
+      <details id="material-request-inbox" data-permission="mrf_review" hidden>
+        <summary>Submitted material requests</summary>
+        <button id="material-request-refresh" type="button" class="secondary">Refresh requests</button>
+        <p id="material-request-inbox-status" role="status"></p>
+        <div id="material-request-results"></div>
+        <button id="material-request-older" type="button" class="secondary" hidden>Show older requests</button>
+      </details>
       <details data-permission="products">
         <summary>Import dated stock history</summary>
         <p>Import one transaction per row from Excel or CSV. Products must already exist.

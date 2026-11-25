@@ -18,6 +18,7 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
             database.initialize(path)
             for username, permissions in (
                 ("employee", ("mrf_catalog", "mrf_submit")), ("reader", ("read",)),
+                ("storekeeper", ("read", "mrf_review")),
             ):
                 accounts.create_user(path, username, "testing-only-password", permissions)
             visible_id = str(uuid4())
@@ -55,6 +56,7 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await client.post(endpoint, json=bad, headers=headers)).status_code, 422)
                 response = await client.post(endpoint, json=values, headers=headers)
                 self.assertEqual(response.status_code, 201)
+                self.assertEqual((await client.get(endpoint, headers=headers)).status_code, 403)
                 self.assertEqual((await client.post(endpoint, json=values, headers=headers)).json(), response.json())
                 with database.connect(path) as connection:
                     row = connection.execute("SELECT * FROM material_requests").fetchone()
@@ -72,3 +74,14 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await client.post(endpoint, json=values, headers={
                     "X-Inventory-Owner": session.json()["id"],
                 })).status_code, 403)
+                client.cookies.clear()
+                credentials["username"] = "storekeeper"
+                session = await client.post("/api/session", json=credentials)
+                review_headers = {"X-Inventory-Owner": session.json()["id"]}
+                self.assertEqual((await client.get(endpoint)).status_code, 409)
+                listing = await client.get(endpoint, headers=review_headers)
+                self.assertEqual(listing.status_code, 200)
+                self.assertEqual(listing.json()["requests"][0]["employee_id"], "0007")
+                self.assertEqual(listing.json()["requests"][0]["items"], [
+                    {"product": "Rice", "unit": "kg", "quantity": "1.250"},
+                ])
