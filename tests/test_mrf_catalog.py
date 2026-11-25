@@ -19,6 +19,7 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
             for username, permissions in (
                 ("employee", ("mrf_catalog", "mrf_submit")), ("reader", ("read",)),
                 ("storekeeper", ("read", "mrf_review")),
+                ("manager", ("read", "mrf_review", "mrf_approve")),
             ):
                 accounts.create_user(path, username, "testing-only-password", permissions)
             visible_id = str(uuid4())
@@ -49,9 +50,12 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 values = {
                     "id": str(uuid4()), "requester_name": "Sample Employee",
                     "employee_id": "0007", "shift": "night", "work_date": "2026-11-25",
+                    "requester_position": "Shift supervisor",
                     "items": [{"product_id": visible_id, "quantity": "1.25"}],
                 }
                 self.assertEqual((await client.post(endpoint, json=values)).status_code, 409)
+                without_position = {key: value for key, value in values.items() if key != "requester_position"}
+                self.assertEqual((await client.post(endpoint, json=without_position, headers=headers)).status_code, 422)
                 bad = {**values, "items": [*values["items"], {"product_id": archived_id, "quantity": "1"}]}
                 self.assertEqual((await client.post(endpoint, json=bad, headers=headers)).status_code, 422)
                 response = await client.post(endpoint, json=values, headers=headers)
@@ -82,6 +86,25 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 listing = await client.get(endpoint, headers=review_headers)
                 self.assertEqual(listing.status_code, 200)
                 self.assertEqual(listing.json()["requests"][0]["employee_id"], "0007")
+                self.assertEqual(listing.json()["requests"][0]["requester_position"], "Shift supervisor")
+                self.assertIsNone(listing.json()["requests"][0]["approved_at"])
                 self.assertEqual(listing.json()["requests"][0]["items"], [
                     {"product": "Rice", "unit": "kg", "quantity": "1.250"},
                 ])
+                approval_url = f"{endpoint}/{values['id']}/approval"
+                self.assertEqual((await client.post(approval_url, headers=review_headers)).status_code, 403)
+                client.cookies.clear()
+                credentials["username"] = "manager"
+                session = await client.post("/api/session", json=credentials)
+                manager_headers = {"X-Inventory-Owner": session.json()["id"]}
+                approval = await client.post(approval_url, headers=manager_headers)
+                self.assertEqual(approval.status_code, 200)
+                self.assertEqual(approval.json()["approver_name"], "manager")
+                self.assertTrue(approval.json()["approved_at"])
+                retry = await client.post(approval_url, headers=manager_headers)
+                self.assertEqual(retry.json(), approval.json())
+                updated = await client.get(endpoint, headers=manager_headers)
+                self.assertEqual(updated.json()["requests"][0]["approved_at"], approval.json()["approved_at"])
+                with database.connect(path) as connection:
+                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM material_request_approvals").fetchone()[0], 1)
+                    self.assertEqual(connection.execute("SELECT COUNT(*) FROM stock_entries").fetchone()[0], 0)

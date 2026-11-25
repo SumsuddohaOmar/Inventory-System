@@ -203,7 +203,8 @@ def register(application, path):
         # A tab can retain an offline profile after another tab switches the
         # shared session cookie. Never post its queue under the new account.
         owner = request.headers.get("x-inventory-owner")
-        if route == "/api/mrf/requests" and not owner:
+        approval_route = route.startswith("/api/mrf/requests/") and route.endswith("/approval")
+        if (route == "/api/mrf/requests" or approval_route) and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload the page to confirm the signed-in account."})
         if route in ("/api/sync", "/api/sync/status") and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload this app before synchronizing. The queue owner must be confirmed; existing pending entries are kept."})
@@ -217,6 +218,8 @@ def register(application, path):
         if route == "/api/mrf/catalog": permissions = {"mrf_catalog"}
         elif route == "/api/mrf/requests":
             permissions = {"mrf_review"} if request.method == "GET" else {"mrf_submit", "mrf_catalog"}
+        elif approval_route:
+            permissions = {"mrf_review", "mrf_approve"}
         elif route.startswith("/api/excel/"): permissions = {"read","reports"}
         elif route.startswith("/api/users"): permissions = {"users"}
         elif route.startswith("/api/audit"): permissions = {"audit"}

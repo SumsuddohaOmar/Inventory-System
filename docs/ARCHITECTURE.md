@@ -61,7 +61,7 @@ cannot post two replacements. Offline corrections remain future work.
 
 ## Migration and recovery
 
-SQLite `user_version` tracks schema 1–5. Startup backs up an existing older
+SQLite `user_version` tracks schema 1–6. Startup backs up an existing older
 database, then applies missing SQL in one transaction. Unknown newer schemas
 are rejected. `executescript` is avoided during upgrades because it can commit
 unexpectedly. All business modules use the same connection helper, bound SQL

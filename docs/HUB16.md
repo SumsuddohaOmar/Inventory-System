@@ -12,7 +12,7 @@ the existing inventory screens. The employee signs in at
 In **Administration → Employees & permissions**, create shift accounts with
 **View material request catalog** and **Submit material requests**. Clear
 **View inventory** for request-only accounts. Each submission records both the
-account and the requester name and employee ID entered on the form. Choose the
+account, requester name, employee ID and position entered on the form. Choose the
 work date explicitly for all shifts in this first stage. An evening collection
 for the following day should use that following day's date.
 
@@ -20,6 +20,9 @@ Administrators can open **Administration → Submitted material requests** to
 review each submission and its complete item list. Storekeepers can use the
 same list with **View inventory** and **Review submitted material requests**.
 The list displays requests newest first and can load older submissions.
+Give designated managers **Approve material requests** in addition to those
+permissions. Approval records the manager and time without changing inventory.
+Earlier requests remain visible with their position marked **Not recorded**.
 
 Every launch creates its own ignored SQLite file under `data/hub16-samples`.
 The sample inventory has two fictional products with opening stock. The server

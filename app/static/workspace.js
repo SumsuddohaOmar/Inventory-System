@@ -378,7 +378,7 @@ byId("safe-delete-product").addEventListener("click", async () => {
   }
 });
 
-const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts",mrf_catalog:"View material request catalog",mrf_submit:"Submit material requests",mrf_review:"Review submitted material requests"};
+const permissionNames={read:"View inventory",products:"Manage products",receive:"Receive & opening stock",issue:"Issue stock",correct:"Correct & void entries",reports:"Reports & Excel",audit:"Read audit history",backups:"Create backups",settings:"Company settings & month closing",users:"Manage accounts",mrf_catalog:"View material request catalog",mrf_submit:"Submit material requests",mrf_review:"Review submitted material requests",mrf_approve:"Approve material requests"};
 for(const [permission,name]of Object.entries(permissionNames)){const label=element("label",undefined,byId("employee-permissions"));label.className="check";const input=element("input",undefined,label);input.type="checkbox";input.value=permission;input.checked=permission==="read";label.append(document.createTextNode(name));}
 byId("employee-form").addEventListener("submit",async(event)=>{event.preventDefault();const status=feedbackFor(event.currentTarget);try{await request("/api/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:byId("employee-name").value,password:byId("employee-password").value,permissions:[...byId("employee-permissions").querySelectorAll("input:checked")].map(input=>input.value)})});byId("employee-password").value="";await listEmployees();status.textContent="Employee created.";}catch(error){status.textContent=error.message;}});
 async function listEmployees(){byId("employee-list").replaceChildren();for(const user of await request("/api/users")){const row=element("li",undefined,byId("employee-list"));element("strong",`${user.username}${user.admin?" · Administrator":""}`,row);const form=element("form",undefined,row),checks=[];
@@ -490,6 +490,16 @@ const requestResults = byId("material-request-results");
 const inboxStatus = byId("material-request-inbox-status");
 let olderRequestCursor = null;
 
+function requestApprovalText(record) {
+  if (!record.approved_at) return "Awaiting approval";
+  const time = new Date(Date.parse(record.approved_at) + companyPreferences.utc_offset_minutes * 60000);
+  const date = formatBusinessDate(time.toISOString().slice(0, 10));
+  const clock = time.toLocaleTimeString("en", {
+    timeZone: "UTC", hour: "numeric", minute: "2-digit", hour12: companyPreferences.time_format === "12h",
+  });
+  return `Approved by ${record.approver_name} on ${date} at ${clock} (company time)`;
+}
+
 async function loadSubmittedRequests(before = null) {
   if (refreshRequests.disabled || !permitted("mrf_review")) return;
   refreshRequests.disabled = true;
@@ -504,13 +514,38 @@ async function loadSubmittedRequests(before = null) {
     for (const record of page.requests) {
       const card = element("details", undefined, requestResults);
       const shift = record.shift[0].toUpperCase() + record.shift.slice(1);
-      element("summary", `${formatBusinessDate(record.work_date)} · ${shift} · ${record.requester_name}`, card);
+      const summary = element("summary", undefined, card);
+      const updateSummary = () => {
+        const status = record.approved_at ? "Approved" : "Awaiting approval";
+        summary.textContent = `${formatBusinessDate(record.work_date)} · ${shift} · ${record.requester_name} · ${status}`;
+      };
+      updateSummary();
       element("p", `Employee ID: ${record.employee_id}`, card);
+      element("p", `Position: ${record.requester_position || "Not recorded"}`, card);
       element("p", `Reference: ${record.id}`, card).className = "hint";
       if (record.notes) element("p", `Remarks: ${record.notes}`, card);
       const list = element("ul", undefined, card);
       for (const item of record.items) {
         element("li", `${item.product} — ${item.quantity} ${item.unit}`, list);
+      }
+      const approvalStatus = element("p", requestApprovalText(record), card);
+      approvalStatus.setAttribute("role", "status");
+      if (!record.approved_at && permitted("mrf_approve")) {
+        const approve = element("button", "Approve request", card);
+        approve.type = "button";
+        approve.addEventListener("click", async () => {
+          approve.disabled = true;
+          try {
+            const approval = await request(`/api/mrf/requests/${record.id}/approval`, {method: "POST"});
+            Object.assign(record, approval);
+            updateSummary();
+            approvalStatus.textContent = requestApprovalText(record);
+            approve.remove();
+          } catch (error) {
+            approvalStatus.textContent = error.message;
+            approve.disabled = false;
+          }
+        });
       }
     }
     olderRequestCursor = page.next;
