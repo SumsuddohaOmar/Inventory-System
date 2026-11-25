@@ -22,7 +22,8 @@ def main():
 
     admin_password, employee_password = token_urlsafe(24), token_urlsafe(24)
     accounts.create_user(path, "sample-admin", admin_password, first=True)
-    accounts.create_user(path, "sample-employee", employee_password, permissions=("mrf_catalog",))
+    accounts.create_user(path, "sample-employee", employee_password,
+                         permissions=("mrf_catalog", "mrf_submit"))
     for name, unit, category, quantity in (
         ("Sample Rice", "kg", "dry-foods", "100"),
         ("Sample Cups", "box", "disposables", "25"),

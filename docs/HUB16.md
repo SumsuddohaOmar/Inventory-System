@@ -6,9 +6,15 @@ From this checkout, install the existing development requirements with
 `python -m pip install -r requirements-dev.txt`, then run
 `python hub16_sample.py` and open `http://127.0.0.1:8765`. The launcher prints
 two randomly generated sets of sample credentials. The administrator can use
-the existing inventory screens. The employee can sign in and read
-`/api/mrf/catalog` in the same browser. The employee portal UI comes in a later
-stage.
+the existing inventory screens. The employee signs in at
+`http://127.0.0.1:8765/material-requests` to submit sample requests.
+
+In **Administration → Employees & permissions**, create shift accounts with
+**View material request catalog** and **Submit material requests**. Clear
+**View inventory** for request-only accounts. Each submission records both the
+account and the requester name and employee ID entered on the form. Choose the
+work date explicitly for all shifts in this first stage. An evening collection
+for the following day should use that following day's date.
 
 Every launch creates its own ignored SQLite file under `data/hub16-samples`.
 The sample inventory has two fictional products with opening stock. The server
@@ -17,7 +23,7 @@ sample run stay under that run's folder. Use only fictional data here.
 
 Run `python verify.py` for the existing inventory checks. Run
 `python -m unittest discover -s tests -p test_mrf_catalog.py` for the catalog
-permission test.
+and request submission integration test.
 
 Open **Hub-16 material request settings** in the inventory administration
 section with an account that can edit company settings. Select a policy for

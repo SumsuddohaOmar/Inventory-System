@@ -13,6 +13,7 @@ from uuid import uuid4
 from app import postgres
 
 MIGRATIONS = Path(__file__).resolve().parent / "migrations"
+SCHEMA_VERSION = 5
 # Stable IDs separate category identity from a label we may rename later.
 INITIAL_CATEGORIES = (
     ("dry-foods", "Dry Foods"),
@@ -57,10 +58,10 @@ def initialize(path: Path):
         # Do this BEFORE BEGIN IMMEDIATE: backing up our own write transaction
         # would wait for itself. Failure aborts startup instead of risking data.
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if version in (1, 2, 3):
+        if version in (1, 2, 3, 4):
             backup_folder = path.parent / "backups"
             backup_folder.mkdir(exist_ok=True)
-            backup_path = backup_folder / f"pre-schema-4-{uuid4()}.sqlite3"
+            backup_path = backup_folder / f"pre-schema-5-{uuid4()}.sqlite3"
             with connect(backup_path) as backup:
                 connection.backup(backup)
                 if backup.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
@@ -68,7 +69,7 @@ def initialize(path: Path):
         # Serialize initialization if two processes start at the same time.
         connection.execute("BEGIN IMMEDIATE")
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if version > 4:
+        if version > SCHEMA_VERSION:
             raise RuntimeError("Database schema is newer than this app supports.")
         if version == 0:
             # This migration deliberately uses one CREATE TABLE statement.
@@ -110,6 +111,11 @@ def initialize(path: Path):
             if statement.strip():
                 raise RuntimeError("Incomplete workflow migration.")
             connection.execute("PRAGMA user_version = 4")
+            version = 4
+        if version == 4:
+            from app import material_requests
+            material_requests.initialize(connection)
+            connection.execute("PRAGMA user_version = 5")
         # A local attachment can be prepared as a first-run template seed. It
         # never imports products/stock. Source archives deliberately omit data/.
         seed_path=path.parent/"template-seed.json"

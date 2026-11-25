@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hub-16 Material Requests</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/material-requests.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Hub-16 Material Requests</h1>
+    <button id="portal-logout" type="button" class="secondary" hidden>Sign out</button>
+  </header>
+  <main>
+    <form id="portal-login" hidden>
+      <h2>Sign in</h2>
+      <label for="portal-username">Username</label>
+      <input id="portal-username" name="username" autocomplete="username" required maxlength="80">
+      <label for="portal-password">Password</label>
+      <input id="portal-password" name="password" type="password" autocomplete="current-password" required maxlength="200">
+      <label class="check"><input name="remember" type="checkbox"> Remember me on this device</label>
+      <button>Sign in</button>
+    </form>
+    <p id="portal-status" role="status"></p>
+    <form id="material-request-form" hidden>
+      <h2>New request</h2>
+      <fieldset id="request-fields">
+        <legend>Request details</legend>
+        <div class="form-grid">
+          <div>
+            <label for="requester-name">Requester’s name</label>
+            <input id="requester-name" name="requester_name" required maxlength="120">
+          </div>
+          <div>
+            <label for="requester-employee-id">Requester’s employee ID</label>
+            <input id="requester-employee-id" name="employee_id" required maxlength="80">
+          </div>
+          <div>
+            <label for="request-shift">Shift</label>
+            <select id="request-shift" name="shift" required>
+              <option value="">Select a shift</option>
+              <option value="morning">Morning</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="night">Night</option>
+            </select>
+          </div>
+          <div>
+            <label for="request-work-date">Work date</label>
+            <input id="request-work-date" name="work_date" type="date" required aria-describedby="request-date-help">
+            <p id="request-date-help" class="hint">For a night shift collecting for the next day, choose that next date.</p>
+          </div>
+        </div>
+        <label for="request-notes">Remarks (optional)</label>
+        <textarea id="request-notes" name="notes" maxlength="500" rows="2"></textarea>
+        <h3>Items</h3>
+        <div id="request-items"></div>
+        <button id="request-add-item" class="secondary" type="button">Add another item</button>
+        <button type="submit">Submit request</button>
+      </fieldset>
+      <p id="request-status" role="status"></p>
+    </form>
+    <template id="request-item-template">
+      <fieldset class="request-item">
+        <legend>Requested item</legend>
+        <div class="form-grid">
+          <div><label>Product</label><select name="product_id" required></select></div>
+          <div><label>Quantity</label><input name="quantity" inputmode="decimal" maxlength="40" required></div>
+        </div>
+        <button type="button" class="secondary">Remove item</button>
+      </fieldset>
+    </template>
+  </main>
+</body>
+</html>

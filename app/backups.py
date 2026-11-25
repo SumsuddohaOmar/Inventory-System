@@ -11,7 +11,7 @@ import shutil
 import sqlite3
 from uuid import uuid4
 
-from app.database import connect
+from app.database import SCHEMA_VERSION, connect
 
 
 def create(path: Path, kind="manual", destinations=()) -> dict:
@@ -70,7 +70,7 @@ def restore_offline(path, backup):
     with connect(backup) as source:
         if source.execute("PRAGMA integrity_check").fetchone()[0] != "ok": raise ValueError("Recovery copy failed verification.")
         version = source.execute("PRAGMA user_version").fetchone()[0]
-        if not 1 <= version <= 4 or not source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products'").fetchone():
+        if not 1 <= version <= SCHEMA_VERSION or not source.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='products'").fetchone():
             raise ValueError("This is not a supported inventory recovery copy.")
     protected = create(path, "protected-pre-restore")
     with connect(backup) as source, connect(path) as destination: source.backup(destination)

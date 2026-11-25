@@ -23,7 +23,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from app import database
-from app import stock
+from app import material_requests, stock
 from app.version import VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -98,6 +98,7 @@ def create_app(database_path: Path | None = None) -> FastAPI:
             # Cloud schema is installed explicitly by the database operator.
             with database.connect(path) as connection:
                 connection.execute("SELECT 1 FROM users LIMIT 1")
+                material_requests.initialize(connection)
             yield
             return
         database.initialize(path)
@@ -236,6 +237,11 @@ def create_app(database_path: Path | None = None) -> FastAPI:
 
     from app.extended_api import register
     register(application, path)
+    material_requests.register(application, path)
+
+    @application.get("/material-requests", include_in_schema=False)
+    def material_request_portal():
+        return FileResponse(STATIC / "material-requests.html")
 
     @application.get("/sw.js", include_in_schema=False)
     def service_worker():
