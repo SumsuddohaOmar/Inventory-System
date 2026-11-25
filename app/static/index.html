@@ -40,6 +40,7 @@
       <a href="#history"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 10a8 8 0 1 1 1 7 M4 5v5h5 M12 8v5l3 2"/></svg><span>History</span></a>
       <a href="#reports"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h16 M6 16v-4 M12 16V5 M18 16V9"/></svg><span>Reports</span></a>
       <a href="#settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 6h16 M4 12h16 M4 18h16 M8 4v4 M16 10v4 M10 16v4"/></svg><span>Settings</span></a>
+      <a href="#requests" data-permission="mrf_review" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 4h12v16H6z M9 8h6 M9 12h6 M9 16h4"/></svg><span>Requests</span></a>
     </nav>
     <div data-screen="dashboard">
     <aside id="dashboard"><strong>Inventory overview</strong><p id="dashboard-summary">Loading balances…</p><ul id="low-stock"></ul></aside>
@@ -112,15 +113,29 @@
       <label for="report-name">Report title</label><input id="report-name" value="Inventory report" required maxlength="120"><label class="check"><input id="report-zero" type="checkbox" checked> Exclude products with zero opening, receiving, issuing and closing</label><details><summary>Select specific products (leave all unchecked for all products)</summary><div id="report-items"></div></details><button>Preview &amp; save report</button></form><div id="report-preview" class="table-scroll"></div><ul id="report-history"></ul>
     </section>
     </div>
+    <div data-screen="requests" hidden>
+      <section class="workspace-section" aria-labelledby="material-requests-heading">
+        <h2 id="material-requests-heading">Material requests</h2>
+        <div id="material-request-inbox" class="request-inbox">
+          <section class="request-panel request-list-panel" aria-label="Submitted requests">
+            <div class="request-panel-header">
+              <h3>Submitted requests</h3>
+              <button id="material-request-refresh" type="button" class="secondary">Refresh</button>
+            </div>
+            <p id="material-request-inbox-status" class="hint" role="status"></p>
+            <ul id="material-request-results" class="request-results"></ul>
+            <button id="material-request-older" type="button" class="secondary" hidden>Show older requests</button>
+          </section>
+          <section class="request-panel request-detail-panel" aria-labelledby="material-request-detail-title">
+            <button id="material-request-back" type="button" class="secondary request-back" hidden>Back to requests</button>
+            <h3 id="material-request-detail-title" tabindex="-1">Request details</h3>
+            <div id="material-request-detail"><p class="hint">Select a request to view its items and approval.</p></div>
+          </section>
+        </div>
+      </section>
+    </div>
     <div data-screen="settings" hidden>
     <section id="admin-section" class="workspace-section" aria-labelledby="admin-heading"><h2 id="admin-heading">Administration</h2>
-      <details id="material-request-inbox" data-permission="mrf_review" hidden>
-        <summary>Submitted material requests</summary>
-        <button id="material-request-refresh" type="button" class="secondary">Refresh requests</button>
-        <p id="material-request-inbox-status" role="status"></p>
-        <div id="material-request-results"></div>
-        <button id="material-request-older" type="button" class="secondary" hidden>Show older requests</button>
-      </details>
       <details data-permission="products">
         <summary>Import dated stock history</summary>
         <p>Import one transaction per row from Excel or CSV. Products must already exist.

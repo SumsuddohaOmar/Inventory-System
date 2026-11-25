@@ -16,7 +16,7 @@ account, requester name, employee ID and position entered on the form. Choose th
 work date explicitly for all shifts in this first stage. An evening collection
 for the following day should use that following day's date.
 
-Administrators can open **Administration → Submitted material requests** to
+Administrators can open **Requests** in the inventory navigation to
 review each submission and its complete item list. Storekeepers can use the
 same list with **View inventory** and **Review submitted material requests**.
 The list displays requests newest first and can load older submissions.

@@ -81,6 +81,7 @@ async function loadWorkspace() {
     if(Number(product.stock.balance)<=product.low_stock_minor/(10**product.precision)) element("li",`Low stock: ${product.name} — ${displayQuantity(product.stock.balance, product)} ${product.unit}`,byId("low-stock"));
   }
   for(const panel of document.querySelectorAll("[data-permission]")) panel.hidden=!permitted(panel.dataset.permission);
+  if (location.hash === "#requests") showInventoryScreen();
   byId("reports-section").hidden=!permitted("reports");
   byId("bulk-section").hidden=!(permitted("receive")||permitted("issue"));
   byId("product-form").closest("section").hidden=!permitted("products");
@@ -488,6 +489,11 @@ const refreshRequests = byId("material-request-refresh");
 const olderRequests = byId("material-request-older");
 const requestResults = byId("material-request-results");
 const inboxStatus = byId("material-request-inbox-status");
+const requestDetail = byId("material-request-detail");
+const requestTitle = byId("material-request-detail-title");
+const requestBack = byId("material-request-back");
+let requestRecords = [];
+let selectedRequest = null;
 let olderRequestCursor = null;
 
 function requestApprovalText(record) {
@@ -500,6 +506,84 @@ function requestApprovalText(record) {
   return `Approved by ${record.approver_name} on ${date} at ${clock} (company time)`;
 }
 
+function requestShift(record) {
+  return record.shift[0].toUpperCase() + record.shift.slice(1);
+}
+
+function renderRequestList() {
+  requestResults.replaceChildren();
+  for (const record of requestRecords) {
+    const row = element("li", undefined, requestResults);
+    const choice = element("button", undefined, row);
+    choice.type = "button";
+    choice.id = `request-choice-${record.id}`;
+    choice.className = "secondary request-choice";
+    choice.setAttribute("aria-pressed", String(record.id === selectedRequest));
+    element("strong", record.requester_name, choice);
+    element("small", `${formatBusinessDate(record.work_date)} · ${requestShift(record)} · ${record.items.length} items`, choice);
+    const badge = element("span", record.approved_at ? "Approved" : "Awaiting approval", choice);
+    badge.className = record.approved_at ? "request-state is-approved" : "request-state";
+    choice.addEventListener("click", () => {
+      selectedRequest = record.id;
+      renderRequestList();
+      renderRequestDetail();
+      requestTitle.focus();
+    });
+  }
+}
+
+function renderRequestDetail() {
+  const record = requestRecords.find(entry => entry.id === selectedRequest);
+  requestInbox.classList.toggle("is-selected", Boolean(record));
+  requestBack.hidden = !record;
+  requestTitle.textContent = record ? record.requester_name : "Request details";
+  requestDetail.replaceChildren();
+  if (!record) {
+    element("p", "Select a request to view its items and approval.", requestDetail).className = "hint";
+    return;
+  }
+  const metadata = element("dl", undefined, requestDetail);
+  metadata.className = "request-meta";
+  for (const [label, value] of [
+    ["Employee ID", record.employee_id], ["Position", record.requester_position || "Not recorded"],
+    ["Work date", formatBusinessDate(record.work_date)], ["Shift", requestShift(record)],
+  ]) {
+    const pair = element("div", undefined, metadata);
+    element("dt", label, pair);
+    element("dd", value, pair);
+  }
+  if (record.notes) element("p", `Remarks: ${record.notes}`, requestDetail);
+  element("h4", "Requested items", requestDetail);
+  const itemTable = element("div", undefined, requestDetail);
+  itemTable.className = "request-items-table";
+  table(["Product", "Quantity", "Unit"], record.items.map(item => [
+    item.product, item.quantity, item.unit,
+  ]), itemTable);
+  const approvalStatus = element("p", requestApprovalText(record), requestDetail);
+  approvalStatus.setAttribute("role", "status");
+  if (!record.approved_at && permitted("mrf_approve")) {
+    const approve = element("button", "Approve request", requestDetail);
+    approve.type = "button";
+    approve.addEventListener("click", async () => {
+      approve.disabled = true;
+      try {
+        const approval = await request(`/api/mrf/requests/${record.id}/approval`, {method: "POST"});
+        const updated = requestRecords.find(entry => entry.id === record.id);
+        if (updated) Object.assign(updated, approval);
+        renderRequestList();
+        if (selectedRequest === record.id) {
+          renderRequestDetail();
+          requestTitle.focus({preventScroll: true});
+        }
+      } catch (error) {
+        approvalStatus.textContent = error.message;
+        approve.disabled = false;
+      }
+    });
+  }
+  element("p", `Reference: ${record.id}`, requestDetail).className = "hint";
+}
+
 async function loadSubmittedRequests(before = null) {
   if (refreshRequests.disabled || !permitted("mrf_review")) return;
   refreshRequests.disabled = true;
@@ -510,44 +594,10 @@ async function loadSubmittedRequests(before = null) {
     // The existing request helper confirms the signed-in account. This route
     // is online-only and outside the browser's offline cache allowlist.
     const page = await request(`/api/mrf/requests${query}`);
-    if (!before) requestResults.replaceChildren();
-    for (const record of page.requests) {
-      const card = element("details", undefined, requestResults);
-      const shift = record.shift[0].toUpperCase() + record.shift.slice(1);
-      const summary = element("summary", undefined, card);
-      const updateSummary = () => {
-        const status = record.approved_at ? "Approved" : "Awaiting approval";
-        summary.textContent = `${formatBusinessDate(record.work_date)} · ${shift} · ${record.requester_name} · ${status}`;
-      };
-      updateSummary();
-      element("p", `Employee ID: ${record.employee_id}`, card);
-      element("p", `Position: ${record.requester_position || "Not recorded"}`, card);
-      element("p", `Reference: ${record.id}`, card).className = "hint";
-      if (record.notes) element("p", `Remarks: ${record.notes}`, card);
-      const list = element("ul", undefined, card);
-      for (const item of record.items) {
-        element("li", `${item.product} — ${item.quantity} ${item.unit}`, list);
-      }
-      const approvalStatus = element("p", requestApprovalText(record), card);
-      approvalStatus.setAttribute("role", "status");
-      if (!record.approved_at && permitted("mrf_approve")) {
-        const approve = element("button", "Approve request", card);
-        approve.type = "button";
-        approve.addEventListener("click", async () => {
-          approve.disabled = true;
-          try {
-            const approval = await request(`/api/mrf/requests/${record.id}/approval`, {method: "POST"});
-            Object.assign(record, approval);
-            updateSummary();
-            approvalStatus.textContent = requestApprovalText(record);
-            approve.remove();
-          } catch (error) {
-            approvalStatus.textContent = error.message;
-            approve.disabled = false;
-          }
-        });
-      }
-    }
+    requestRecords = before ? [...requestRecords, ...page.requests] : page.requests;
+    if (!requestRecords.some(record => record.id === selectedRequest)) selectedRequest = null;
+    renderRequestList();
+    renderRequestDetail();
     olderRequestCursor = page.next;
     olderRequests.hidden = !olderRequestCursor;
     inboxStatus.textContent = requestResults.childElementCount
@@ -561,8 +611,12 @@ async function loadSubmittedRequests(before = null) {
   }
 }
 
-requestInbox.addEventListener("toggle", () => {
-  if (requestInbox.open) void loadSubmittedRequests();
+requestBack.addEventListener("click", () => {
+  const previous = selectedRequest;
+  selectedRequest = null;
+  renderRequestList();
+  renderRequestDetail();
+  byId(`request-choice-${previous}`)?.focus();
 });
 refreshRequests.addEventListener("click", () => loadSubmittedRequests());
 olderRequests.addEventListener("click", () => {
@@ -731,7 +785,7 @@ byId("template-save-form").addEventListener("submit",async(event)=>{event.preven
 // Screen changes hide panels without rebuilding their forms or losing draft input.
 function showInventoryScreen() {
   const links = [...document.querySelectorAll(".screen-nav a")];
-  const selected = links.find(link => link.hash === location.hash) || links[0];
+  const selected = links.find(link => !link.hidden && link.hash === location.hash) || links[0];
   const previous = links.find(link => link.hasAttribute("aria-current"));
   if (previous && previous !== selected) byId("status").textContent = "";
   for (const link of links) {
@@ -740,7 +794,10 @@ function showInventoryScreen() {
   }
   for (const panel of document.querySelectorAll("[data-screen]"))
     panel.hidden = "#" + panel.dataset.screen !== selected.hash;
-  window.scrollTo(0, 0);
+  if (previous !== selected) {
+    window.scrollTo(0, 0);
+    if (selected.hash === "#requests") void loadSubmittedRequests();
+  }
 }
 window.addEventListener("hashchange", showInventoryScreen);
 showInventoryScreen();
