@@ -135,6 +135,13 @@
               <a href="/material-requests" data-permission="mrf_submit" hidden>Enter a walk-in request</a>
             </div>
             <p id="material-request-inbox-status" class="hint" role="status"></p>
+            <details id="material-preparation" hidden>
+              <summary>Prepare requests together</summary>
+              <p class="hint">Select approved requests for the same work date.</p>
+              <p id="material-preparation-status" role="status"></p>
+              <div id="material-preparation-totals" class="request-items-table"></div>
+              <button id="material-preparation-save" type="button" class="secondary" disabled>Mark selected prepared</button>
+            </details>
             <ul id="material-request-results" class="request-results"></ul>
             <button id="material-request-older" type="button" class="secondary" hidden>Show older requests</button>
           </section>

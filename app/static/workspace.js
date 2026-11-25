@@ -554,6 +554,12 @@ let olderRequestCursor = null;
 let requestCompanyDate;
 const pendingIssues = new Map();
 const issueDraftPrefix = owner => `hub16-issue:${owner}:`;
+const preparationPanel = byId("material-preparation");
+const preparationStatus = byId("material-preparation-status");
+const preparationTotals = byId("material-preparation-totals");
+const prepareSelected = byId("material-preparation-save");
+const selectedForPreparation = new Set();
+let preparingBatch = false;
 const dailyMrf = byId("daily-mrf");
 const dailyMrfDate = byId("daily-mrf-date");
 const dailyMrfStatus = byId("daily-mrf-status");
@@ -691,7 +697,59 @@ function renderPendingAction(record) {
   });
 }
 
+function canPrepare(record) {
+  return record.approved_at && !record.prepared_at && !record.cancelled_at &&
+    !record.pending_action && !record.issues.length;
+}
+
+function renderPreparationTotals() {
+  const totals = new Map();
+  for (const record of requestRecords.filter(entry => selectedForPreparation.has(entry.id))) {
+    for (const item of record.items) {
+      const total = totals.get(item.product_id) ?? {
+        name: item.product, unit: item.unit, amount: 0n, precision: item.quantity.split(".")[1]?.length ?? 0,
+      };
+      total.amount += minorValue(item.quantity);
+      totals.set(item.product_id, total);
+    }
+  }
+  prepareSelected.disabled = preparingBatch || !totals.size;
+  preparationTotals.replaceChildren();
+  if (totals.size) table(["Product", "Quantity", "Unit"], [...totals.values()]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(item => [item.name, minorText(item.amount, item.precision), item.unit]), preparationTotals);
+}
+
+preparationPanel.addEventListener("toggle", renderRequestList);
+prepareSelected.addEventListener("click", async () => {
+  if (prepareSelected.disabled) return;
+  preparingBatch = true;
+  preparationStatus.textContent = "Saving preparation…";
+  renderRequestList();
+  try {
+    const result = await request("/api/mrf/preparations", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({request_ids: [...selectedForPreparation]}),
+    });
+    for (const record of requestRecords) {
+      if (result.prepared[record.id]) record.prepared_at = result.prepared[record.id];
+    }
+    selectedForPreparation.clear();
+    preparationStatus.textContent = "Selected requests marked prepared.";
+    renderRequestDetail();
+  } catch (error) {
+    preparationStatus.textContent = error.message;
+  } finally {
+    preparingBatch = false;
+    renderRequestList();
+  }
+});
+
 function renderRequestList() {
+  preparationPanel.hidden = !permitted("issue");
+  for (const id of selectedForPreparation) {
+    if (!requestRecords.some(record => record.id === id && canPrepare(record))) selectedForPreparation.delete(id);
+  }
   requestResults.replaceChildren();
   for (const record of requestRecords) {
     const row = element("li", undefined, requestResults);
@@ -711,7 +769,29 @@ function renderRequestList() {
       renderRequestDetail();
       requestTitle.focus();
     });
+    if (!preparationPanel.hidden && preparationPanel.open && canPrepare(record)) {
+      const label = element("label", undefined, row);
+      label.className = "check";
+      const select = element("input", undefined, label);
+      select.type = "checkbox";
+      select.checked = selectedForPreparation.has(record.id);
+      select.disabled = preparingBatch;
+      label.append(document.createTextNode(`Prepare request from ${record.requester_name}`));
+      select.addEventListener("change", () => {
+        const other = requestRecords.find(entry => selectedForPreparation.has(entry.id));
+        if (select.checked && other && other.work_date !== record.work_date) {
+          select.checked = false;
+          preparationStatus.textContent = "Choose requests for the same work date.";
+          return;
+        }
+        if (select.checked) selectedForPreparation.add(record.id);
+        else selectedForPreparation.delete(record.id);
+        preparationStatus.textContent = "";
+        renderPreparationTotals();
+      });
+    }
   }
+  renderPreparationTotals();
 }
 
 function renderIssueForm(record) {

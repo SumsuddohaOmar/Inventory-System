@@ -207,7 +207,9 @@ def register(application, path):
         # shared session cookie. Never post its queue under the new account.
         owner = request.headers.get("x-inventory-owner")
         approval_route = route.startswith("/api/mrf/requests/") and route.endswith("/approval")
-        issue_route = route.startswith("/api/mrf/requests/") and route.endswith(("/issues", "/stock", "/pending-action", "/prepare"))
+        issue_route = route == "/api/mrf/preparations" or (
+            route.startswith("/api/mrf/requests/") and route.endswith(("/issues", "/stock", "/pending-action", "/prepare"))
+        )
         receipt_route = route.startswith("/api/mrf/issues/") and route.endswith("/receipt")
         return_route = route.startswith("/api/mrf/issues/") and route.endswith("/returns")
         daily_form_route = route.startswith("/api/mrf/daily/")

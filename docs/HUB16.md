@@ -37,6 +37,8 @@ numbered form grouped by shift. Requests use their work date and issues use
 their assigned MRF date. Staff with settings permission can close or reopen a
 form. An approved request can be marked prepared, or its remaining quantities
 can be closed or transferred to a later date for a new approval.
+Use **Prepare requests together** to select approved requests for one work
+date, review the combined item quantities, and mark the group as prepared.
 
 The portal shows account-scoped request history. Requesters can copy items,
 save named item lists, and edit or cancel requests awaiting approval. An edit
@@ -87,8 +89,8 @@ point for handling connection loss and concurrent submissions.
 
 ## Remaining rollout work
 
-- Link standalone Inventory issues selectively to a daily MRF. Add combined
-  preparation across requests and employee self-registration with admin approval.
+- Link standalone Inventory issues selectively to a daily MRF. Add employee
+  self-registration with admin approval.
 - Verify offline recovery, sign-in expiry, account switching and installation on
   iPhone, iPad, macOS, Android and Windows. Verify hosted PostgreSQL migration,
   backup and restore in an isolated environment.

@@ -60,6 +60,12 @@ class DailyFormStatus(BaseModel):
     closed: bool = Field(strict=True)
 
 
+class PreparationBatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_ids: list[UUID] = Field(min_length=1, max_length=100)
+
+
 class MaterialReturn(RequestLine):
     id: UUID
     stock_date: date
@@ -532,25 +538,49 @@ def register(application, path):
     def issue_request(request_id: UUID, values: MaterialIssue, request: Request):
         return issue(path, str(request_id), request.state.user, values)
 
-    @application.post("/api/mrf/requests/{request_id}/prepare")
-    def prepare_request(request_id: UUID, request: Request):
-        identity = str(request_id)
+    def prepare_requests(request_ids, actor):
+        identities = list(dict.fromkeys(map(str, request_ids)))
+        prepared_at = datetime.now(timezone.utc).isoformat()
+        preparations = {}
         with database.connect(path) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            if not connection.execute("SELECT 1 FROM material_request_approvals WHERE request_id=?", (identity,)).fetchone():
-                raise HTTPException(409, "Approve the request before marking it prepared.")
-            existing = connection.execute(
-                "SELECT prepared_at FROM material_request_preparations WHERE request_id=?", (identity,),
-            ).fetchone()
-            if existing:
-                return dict(existing)
-            if connection.execute("SELECT 1 FROM material_request_pending_actions WHERE request_id=?", (identity,)).fetchone():
-                raise HTTPException(409, "The remaining quantities on this request were already handled.")
-            prepared_at = datetime.now(timezone.utc).isoformat()
-            connection.execute("INSERT INTO material_request_preparations VALUES (?, ?, ?)",
-                               (identity, request.state.user["id"], prepared_at))
-            audit.record(connection, "material_request.prepared", identity)
-        return {"prepared_at": prepared_at}
+            work_dates = set()
+            for identity in identities:
+                record = connection.execute(
+                    """SELECT r.work_date, a.approved_at, p.prepared_at, pa.action, c.cancelled_at,
+                              CASE WHEN EXISTS (SELECT 1 FROM material_request_issues i WHERE i.request_id=r.id)
+                                   THEN 1 ELSE 0 END AS has_issue
+                       FROM material_requests r
+                       LEFT JOIN material_request_approvals a ON a.request_id=r.id
+                       LEFT JOIN material_request_preparations p ON p.request_id=r.id
+                       LEFT JOIN material_request_pending_actions pa ON pa.request_id=r.id
+                       LEFT JOIN material_request_cancellations c ON c.request_id=r.id
+                       WHERE r.id=?""", (identity,),
+                ).fetchone()
+                if not record or not record["approved_at"] or record["cancelled_at"]:
+                    raise HTTPException(409, "Only active, approved requests can be marked prepared.")
+                work_dates.add(record["work_date"])
+                if len(work_dates) > 1:
+                    raise HTTPException(422, "Select requests from the same work date.")
+                if record["prepared_at"]:
+                    preparations[identity] = record["prepared_at"]
+                    continue
+                if record["action"] or record["has_issue"]:
+                    raise HTTPException(409, "A selected request has already moved past preparation. Refresh the list.")
+                connection.execute("INSERT INTO material_request_preparations VALUES (?, ?, ?)",
+                                   (identity, actor, prepared_at))
+                audit.record(connection, "material_request.prepared", identity)
+                preparations[identity] = prepared_at
+        return preparations
+
+    @application.post("/api/mrf/requests/{request_id}/prepare")
+    def prepare_request(request_id: UUID, request: Request):
+        prepared = prepare_requests([request_id], request.state.user["id"])
+        return {"prepared_at": prepared[str(request_id)]}
+
+    @application.post("/api/mrf/preparations")
+    def prepare_batch(values: PreparationBatch, request: Request):
+        return {"prepared": prepare_requests(values.request_ids, request.state.user["id"])}
 
     @application.post("/api/mrf/requests/{request_id}/pending-action")
     def change_pending(request_id: UUID, values: PendingAction, request: Request):
