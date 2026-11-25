@@ -158,7 +158,11 @@ input, select, textarea, fieldset { min-width: 0; }
 .screen-nav a { overflow-wrap: normal; }
 .screen-nav .nav-home-label { display: none; }
 .requester-grid > div { min-width: 0; }
-.requester-grid input, .requester-grid select { height: 46px; }
+.requester-grid input, .requester-grid select {
+  min-height: 46px;
+  padding-block: 8px;
+  line-height: 1.5;
+}
 .request-error { color: #9a251b; font-weight: 650; }
 .request-row-error { grid-column: 1 / -1; margin: 0; }
 .bulk-row input[aria-invalid="true"] { border-color: #9a251b; }
