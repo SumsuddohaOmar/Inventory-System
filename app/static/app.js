@@ -99,7 +99,9 @@ async function request(url, options = {}) {
   if (!response.ok) {
     let body;
     try { body = await response.json(); } catch { body = {}; }
-    const error = new Error(typeof body.detail === "string" ? body.detail : "Please check the entered values and try again.");
+    const detail = body.detail;
+    const error = new Error(typeof detail === "string" ? detail : detail?.message || "Please check the entered values and try again.");
+    error.productId = detail?.product_id;
     // A validation/conflict response means the server rejected the operation;
     // a connection failure has an uncertain outcome and needs a history check.
     error.rejected = response.status >= 400 && response.status < 500;

@@ -136,7 +136,8 @@ li span { display: block; color: #475f53; }
 .request-meta dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
 .request-items-table th, .request-items-table td { white-space: normal; padding: 8px; }
 .request-items-table th:first-child, .request-items-table td:first-child { overflow-wrap: anywhere; }
-.request-items-table :nth-child(2) { text-align: right; font-variant-numeric: tabular-nums; }
+.request-items-table :is(th, td):nth-child(n+2):nth-child(-n+4) { text-align: right; font-variant-numeric: tabular-nums; }
+.request-items-table { overflow-x: auto; }
 .request-detail-panel p { overflow-wrap: anywhere; }
 .request-back { display: none; }
 @media (max-width: 680px) {

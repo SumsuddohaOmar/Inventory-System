@@ -100,6 +100,7 @@ def create_app(database_path: Path | None = None) -> FastAPI:
                 connection.execute("SELECT 1 FROM users LIMIT 1")
                 material_requests.initialize(connection)
                 material_requests.initialize_approvals(connection, postgres=True)
+                material_requests.initialize_issues(connection)
             yield
             return
         database.initialize(path)

@@ -23,6 +23,12 @@ The list displays requests newest first and can load older submissions.
 Give designated managers **Approve material requests** in addition to those
 permissions. Approval records the manager and time without changing inventory.
 Earlier requests remain visible with their position marked **Not recorded**.
+Storekeepers with **Issue stock** and **Review submitted material requests**
+can record quantities handed out from an approved request. The actual stock
+date is recorded separately from the issuance work date used for MRF
+assignment. Quantities left blank remain pending. Excess issuance requires a
+reason, and all entered quantities must pass normal stock checks before any
+stock changes are saved.
 
 Every launch creates its own ignored SQLite file under `data/hub16-samples`.
 The sample inventory has two fictional products with opening stock. The server

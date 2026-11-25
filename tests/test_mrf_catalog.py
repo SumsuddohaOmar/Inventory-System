@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import httpx
 
-from app import accounts, database
+from app import accounts, database, stock
 from app.main import create_app
 
 
@@ -20,6 +20,7 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 ("employee", ("mrf_catalog", "mrf_submit")), ("reader", ("read",)),
                 ("storekeeper", ("read", "mrf_review")),
                 ("manager", ("read", "mrf_review", "mrf_approve")),
+                ("issuer", ("read", "mrf_review", "issue")),
             ):
                 accounts.create_user(path, username, "testing-only-password", permissions)
             visible_id = str(uuid4())
@@ -89,7 +90,8 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(listing.json()["requests"][0]["requester_position"], "Shift supervisor")
                 self.assertIsNone(listing.json()["requests"][0]["approved_at"])
                 self.assertEqual(listing.json()["requests"][0]["items"], [
-                    {"product": "Rice", "unit": "kg", "quantity": "1.250"},
+                    {"product": "Rice", "unit": "kg", "quantity": "1.250", "product_id": visible_id,
+                     "issued": "0.000", "pending": "1.250"},
                 ])
                 approval_url = f"{endpoint}/{values['id']}/approval"
                 self.assertEqual((await client.post(approval_url, headers=review_headers)).status_code, 403)
@@ -108,3 +110,33 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 with database.connect(path) as connection:
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM material_request_approvals").fetchone()[0], 1)
                     self.assertEqual(connection.execute("SELECT COUNT(*) FROM stock_entries").fetchone()[0], 0)
+                issuance_url = f"{endpoint}/{values['id']}/issues"
+                issuance = {
+                    "id": str(uuid4()), "stock_date": "2026-01-01", "work_date": "2026-11-26",
+                    "items": [{"product_id": visible_id, "quantity": "0.75"}],
+                }
+                self.assertEqual((await client.post(issuance_url, json=issuance, headers=manager_headers)).status_code, 403)
+                stock.save_entry(path, visible_id, {
+                    "id": str(uuid4()), "kind": "opening", "effective_date": "2026-01-01",
+                    "quantity": "10", "notes": "",
+                })
+                client.cookies.clear()
+                credentials["username"] = "issuer"
+                session = await client.post("/api/session", json=credentials)
+                issue_headers = {"X-Inventory-Owner": session.json()["id"]}
+                bad_issue = {**issuance, "items": [*issuance["items"], {"product_id": archived_id, "quantity": "1"}]}
+                self.assertEqual((await client.post(issuance_url, json=bad_issue, headers=issue_headers)).status_code, 422)
+                saved = await client.post(issuance_url, json=issuance, headers=issue_headers)
+                self.assertEqual(saved.status_code, 201)
+                replay = await client.post(issuance_url, json=issuance, headers=issue_headers)
+                self.assertEqual(replay.json(), saved.json())
+                updated = (await client.get(endpoint, headers=issue_headers)).json()["requests"][0]
+                self.assertEqual(updated["items"][0]["issued"], "0.750")
+                self.assertEqual(updated["items"][0]["pending"], "0.500")
+                self.assertEqual((updated["issues"][0]["stock_date"], updated["issues"][0]["mrf_date"]),
+                                 ("2026-01-01", "2026-11-26"))
+                excess = {**issuance, "id": str(uuid4())}
+                self.assertEqual((await client.post(issuance_url, json=excess, headers=issue_headers)).status_code, 422)
+                excess["excess_reason"] = "Additional quantity requested at handover"
+                self.assertEqual((await client.post(issuance_url, json=excess, headers=issue_headers)).status_code, 201)
+                self.assertEqual(stock.get_stock(path, visible_id)["balance"], "8.500")

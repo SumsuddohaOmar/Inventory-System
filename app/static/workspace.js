@@ -495,6 +495,7 @@ const requestBack = byId("material-request-back");
 let requestRecords = [];
 let selectedRequest = null;
 let olderRequestCursor = null;
+const pendingIssues = new Map();
 
 function requestApprovalText(record) {
   if (!record.approved_at) return "Awaiting approval";
@@ -510,6 +511,12 @@ function requestShift(record) {
   return record.shift[0].toUpperCase() + record.shift.slice(1);
 }
 
+function requestState(record) {
+  if (!record.approved_at) return "Awaiting approval";
+  if (!record.issues.length) return "Approved";
+  return record.items.some(item => Number(item.pending) > 0) ? "Partially issued" : "Issued";
+}
+
 function renderRequestList() {
   requestResults.replaceChildren();
   for (const record of requestRecords) {
@@ -521,7 +528,7 @@ function renderRequestList() {
     choice.setAttribute("aria-pressed", String(record.id === selectedRequest));
     element("strong", record.requester_name, choice);
     element("small", `${formatBusinessDate(record.work_date)} · ${requestShift(record)} · ${record.items.length} items`, choice);
-    const badge = element("span", record.approved_at ? "Approved" : "Awaiting approval", choice);
+    const badge = element("span", requestState(record), choice);
     badge.className = record.approved_at ? "request-state is-approved" : "request-state";
     choice.addEventListener("click", () => {
       selectedRequest = record.id;
@@ -530,6 +537,120 @@ function renderRequestList() {
       requestTitle.focus();
     });
   }
+}
+
+function renderIssueForm(record) {
+  const form = element("form", undefined, requestDetail);
+  const controls = element("fieldset", undefined, form);
+  element("legend", "Record issuance", controls);
+  const queued = pendingIssues.get(record.id);
+  const dates = element("div", undefined, controls);
+  dates.className = "form-grid";
+  for (const [key, label, value] of [
+    ["stock_date", "Actual stock date", queued?.stock_date ?? businessToday()],
+    ["work_date", "Issuance work date", queued?.work_date ?? record.work_date],
+  ]) {
+    const group = element("div", undefined, dates);
+    const caption = element("label", label, group);
+    const input = element("input", undefined, group);
+    input.id = caption.htmlFor = `request-issue-${key}`;
+    input.name = key;
+    input.type = "date";
+    input.required = true;
+    input.value = value;
+  }
+  element("p", "Enter quantities handed out. Leave other items blank. Use the work date the issue belongs to, including next-day night-shift issues.", controls).className = "hint";
+  const quantities = new Map();
+  const rowErrors = new Map();
+  for (const item of record.items) {
+    const row = element("div", undefined, controls);
+    row.className = "bulk-row";
+    const label = element("label", item.product, row);
+    element("small", `Pending: ${item.pending} ${item.unit}`, label);
+    const input = element("input", undefined, row);
+    input.id = label.htmlFor = `request-issue-${item.product_id}`;
+    input.inputMode = "decimal";
+    input.maxLength = 40;
+    input.value = queued?.items.find(line => line.product_id === item.product_id)?.quantity ?? "";
+    const error = element("p", "", row);
+    error.id = `${input.id}-error`;
+    error.className = "request-error request-row-error";
+    error.hidden = true;
+    input.addEventListener("input", () => {
+      error.hidden = true;
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    });
+    quantities.set(item.product_id, input);
+    rowErrors.set(item.product_id, error);
+  }
+  const reasonLabel = element("label", "Reason for issuing above the remaining quantity (if applicable)", controls);
+  const reason = element("textarea", undefined, controls);
+  reason.id = reasonLabel.htmlFor = "request-excess-reason";
+  reason.name = "excess_reason";
+  reason.maxLength = 500;
+  reason.rows = 2;
+  reason.value = queued?.excess_reason ?? "";
+  const save = element("button", queued ? "Retry issue" : "Save issue", form);
+  save.type = "submit";
+  const feedback = element("p", queued ? "The previous save was unconfirmed. Retry to check the same issue." : "", form);
+  feedback.setAttribute("role", "status");
+  controls.disabled = Boolean(queued);
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const payload = pendingIssues.get(record.id) ?? {
+      ...Object.fromEntries(new FormData(form)),
+      id: inventoryUUID(),
+      items: [...quantities].map(([product_id, input]) => ({product_id, quantity: input.value.trim()}))
+        .filter(item => item.quantity),
+    };
+    if (!payload.items.length) {
+      feedback.textContent = "Enter at least one issue quantity.";
+      return;
+    }
+    pendingIssues.set(record.id, payload);
+    controls.disabled = save.disabled = true;
+    feedback.textContent = "Saving issue…";
+    try {
+      await request(`/api/mrf/requests/${record.id}/issues`, {
+        method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      if (error.rejected) pendingIssues.delete(record.id);
+      const retry = pendingIssues.has(record.id);
+      controls.disabled = retry;
+      save.disabled = false;
+      save.textContent = retry ? "Retry issue" : "Save issue";
+      feedback.textContent = retry ? "The save could not be confirmed. Retry the same issue." : error.message;
+      const input = quantities.get(error.productId);
+      if (!retry && input) {
+        const message = rowErrors.get(error.productId);
+        message.textContent = error.message;
+        message.hidden = false;
+        input.setAttribute("aria-invalid", "true");
+        input.setAttribute("aria-describedby", message.id);
+        input.focus();
+        feedback.textContent = "";
+      }
+      return;
+    }
+    pendingIssues.delete(record.id);
+    feedback.textContent = "Issue saved. Stock was updated.";
+    try {
+      const page = await request(`/api/mrf/requests?request_id=${encodeURIComponent(record.id)}`);
+      const updated = page.requests[0];
+      requestRecords = requestRecords.map(entry => entry.id === record.id ? updated : entry);
+      renderRequestList();
+      if (selectedRequest === record.id) {
+        renderRequestDetail();
+        requestTitle.focus({preventScroll: true});
+        inboxStatus.textContent = "Issue saved. Stock was updated.";
+      }
+      void Promise.allSettled([loadProducts(), loadWorkspace()]);
+    } catch {
+      feedback.textContent = "Issue saved. Refresh requests to reload the updated quantities.";
+    }
+  });
 }
 
 function renderRequestDetail() {
@@ -556,8 +677,8 @@ function renderRequestDetail() {
   element("h4", "Requested items", requestDetail);
   const itemTable = element("div", undefined, requestDetail);
   itemTable.className = "request-items-table";
-  table(["Product", "Quantity", "Unit"], record.items.map(item => [
-    item.product, item.quantity, item.unit,
+  table(["Product", "Requested", "Issued", "Pending", "Unit"], record.items.map(item => [
+    item.product, item.quantity, item.issued, item.pending, item.unit,
   ]), itemTable);
   const approvalStatus = element("p", requestApprovalText(record), requestDetail);
   approvalStatus.setAttribute("role", "status");
@@ -581,6 +702,16 @@ function renderRequestDetail() {
       }
     });
   }
+  if (record.issues.length) {
+    const history = element("details", undefined, requestDetail);
+    element("summary", `Issue history (${record.issues.length})`, history);
+    const list = element("ul", undefined, history);
+    for (const issue of record.issues) {
+      const entry = element("li", `${issue.issuer_name} · Stock date ${formatBusinessDate(issue.stock_date)} · MRF work date ${formatBusinessDate(issue.mrf_date)}`, list);
+      if (issue.excess_reason) element("p", `Excess reason: ${issue.excess_reason}`, entry);
+    }
+  }
+  if (record.approved_at && permitted("issue")) renderIssueForm(record);
   element("p", `Reference: ${record.id}`, requestDetail).className = "hint";
 }
 

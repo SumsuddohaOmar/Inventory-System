@@ -13,7 +13,7 @@ from uuid import uuid4
 from app import postgres
 
 MIGRATIONS = Path(__file__).resolve().parent / "migrations"
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 # Stable IDs separate category identity from a label we may rename later.
 INITIAL_CATEGORIES = (
     ("dry-foods", "Dry Foods"),
@@ -121,6 +121,11 @@ def initialize(path: Path):
             from app import material_requests
             material_requests.initialize_approvals(connection)
             connection.execute("PRAGMA user_version = 6")
+            version = 6
+        if version == 6:
+            from app import material_requests
+            material_requests.initialize_issues(connection)
+            connection.execute("PRAGMA user_version = 7")
         # A local attachment can be prepared as a first-run template seed. It
         # never imports products/stock. Source archives deliberately omit data/.
         seed_path=path.parent/"template-seed.json"

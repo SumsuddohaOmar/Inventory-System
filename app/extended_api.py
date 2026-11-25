@@ -204,7 +204,8 @@ def register(application, path):
         # shared session cookie. Never post its queue under the new account.
         owner = request.headers.get("x-inventory-owner")
         approval_route = route.startswith("/api/mrf/requests/") and route.endswith("/approval")
-        if (route == "/api/mrf/requests" or approval_route) and not owner:
+        issue_route = route.startswith("/api/mrf/requests/") and route.endswith("/issues")
+        if (route == "/api/mrf/requests" or approval_route or issue_route) and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload the page to confirm the signed-in account."})
         if route in ("/api/sync", "/api/sync/status") and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload this app before synchronizing. The queue owner must be confirmed; existing pending entries are kept."})
@@ -220,6 +221,8 @@ def register(application, path):
             permissions = {"mrf_review"} if request.method == "GET" else {"mrf_submit", "mrf_catalog"}
         elif approval_route:
             permissions = {"mrf_review", "mrf_approve"}
+        elif issue_route:
+            permissions = {"mrf_review", "issue"}
         elif route.startswith("/api/excel/"): permissions = {"read","reports"}
         elif route.startswith("/api/users"): permissions = {"users"}
         elif route.startswith("/api/audit"): permissions = {"audit"}
