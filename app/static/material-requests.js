@@ -27,15 +27,32 @@ async function api(url, options) {
 function addRow() {
   const row = rowTemplate.content.firstElementChild.cloneNode(true);
   const select = row.querySelector("select");
-  const quantity = row.querySelector("input");
-  const [productLabel, quantityLabel] = row.querySelectorAll("label");
+  const search = row.querySelector("input[type=search]");
+  const quantity = row.querySelector("input[name=quantity]");
+  const searchStatus = row.querySelector("[role=status]");
+  const [searchLabel, productLabel, quantityLabel] = row.querySelectorAll("label");
+  search.id = searchLabel.htmlFor = `request-search-${nextRowNumber}`;
   select.id = productLabel.htmlFor = `request-product-${nextRowNumber}`;
   quantity.id = quantityLabel.htmlFor = `request-quantity-${nextRowNumber}`;
   nextRowNumber += 1;
-  select.add(new Option("Select a product", ""));
-  for (const product of products) {
-    select.add(new Option(`${product.name} (${product.unit})`, product.id));
+
+  function filterProducts() {
+    const selected = select.value;
+    const query = search.value.trim().toLowerCase();
+    const matches = products.filter(product => product.name.toLowerCase().includes(query));
+    // Searching again should never erase a product already picked for this row.
+    const options = selected && !matches.some(product => product.id === selected)
+      ? [products.find(product => product.id === selected), ...matches]
+      : matches;
+    select.replaceChildren(new Option("Select a product", ""), ...options.map(
+      product => new Option(`${product.name} (${product.unit})`, product.id),
+    ));
+    select.value = selected;
+    searchStatus.hidden = matches.length > 0;
+    searchStatus.textContent = matches.length ? "" : "No products match your search.";
   }
+  search.addEventListener("input", filterProducts);
+  filterProducts();
   row.querySelector("button").addEventListener("click", () => {
     row.remove();
     if (items.childElementCount === 0) addRow();
@@ -43,7 +60,7 @@ function addRow() {
   });
   items.append(row);
   addItem.disabled = items.childElementCount >= 100;
-  return select;
+  return search;
 }
 
 async function showSession(user) {
@@ -115,7 +132,7 @@ requestForm.addEventListener("submit", async event => {
       id: crypto.randomUUID(),
       items: Array.from(items.children, row => ({
         product_id: row.querySelector("select").value,
-        quantity: row.querySelector("input").value.trim(),
+        quantity: row.querySelector("input[name=quantity]").value.trim(),
       })),
     };
   }
