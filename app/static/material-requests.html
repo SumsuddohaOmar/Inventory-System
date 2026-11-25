@@ -27,17 +27,17 @@
       <h2>New request</h2>
       <fieldset id="request-fields">
         <legend>Request details</legend>
-        <div class="form-grid">
+        <div class="form-grid requester-grid">
           <div>
-            <label for="requester-name">Requester’s name</label>
+            <label for="requester-name">Name</label>
             <input id="requester-name" name="requester_name" required maxlength="120">
           </div>
           <div>
-            <label for="requester-employee-id">Requester’s employee ID</label>
+            <label for="requester-employee-id">Employee ID</label>
             <input id="requester-employee-id" name="employee_id" required maxlength="80">
           </div>
           <div>
-            <label for="requester-position">Requester’s position</label>
+            <label for="requester-position">Position</label>
             <input id="requester-position" name="requester_position" required maxlength="120">
           </div>
           <div>
@@ -58,6 +58,7 @@
         <label for="request-notes">Remarks (optional)</label>
         <textarea id="request-notes" name="notes" maxlength="500" rows="2"></textarea>
         <h3>Items</h3>
+        <p id="request-items-error" class="request-error" role="status" tabindex="-1" hidden></p>
         <p class="hint">Enter quantities for the items you need. You can switch categories and submit all entered items together.</p>
         <div class="form-grid">
           <div><label for="request-category">Category</label><select id="request-category"></select></div>
@@ -70,13 +71,14 @@
           <ul id="request-selected-items"></ul>
         </details>
         <button type="submit">Submit request</button>
+        <p id="request-status" role="status"></p>
       </fieldset>
-      <p id="request-status" role="status"></p>
     </form>
     <template id="request-item-template">
       <div class="bulk-row">
         <label><strong></strong><small class="hint"></small></label>
         <input type="text" inputmode="decimal" maxlength="40" placeholder="Qty" autocomplete="off">
+        <p class="request-error request-row-error" role="status" hidden></p>
       </div>
     </template>
   </main>

@@ -88,13 +88,13 @@ def submit(path, account_id: str, values: MaterialRequest):
                 "SELECT name, unit, precision FROM products WHERE id=? AND archived=0", (product_id,)
             ).fetchone()
             if product is None:
-                raise HTTPException(422, "A selected product is unavailable. Refresh the catalog.")
+                raise HTTPException(422, {"product_id": product_id, "message": "This product is unavailable. Clear its quantity or reload the catalog."})
             try:
                 amount = stock.to_minor(item.quantity, product["precision"])
             except stock.StockError as error:
-                raise HTTPException(422, f"{product['name']}: {error}") from error
+                raise HTTPException(422, {"product_id": product_id, "message": str(error)}) from error
             if amount <= 0:
-                raise HTTPException(422, "Requested quantities must be greater than zero.")
+                raise HTTPException(422, {"product_id": product_id, "message": "Enter a quantity greater than zero."})
             # Save the visible name and unit at submission for future review.
             connection.execute(
                 """INSERT INTO material_request_lines
