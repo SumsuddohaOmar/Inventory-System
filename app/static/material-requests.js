@@ -8,12 +8,16 @@ const requestStatus = document.getElementById("request-status");
 const fields = document.getElementById("request-fields");
 const items = document.getElementById("request-items");
 const rowTemplate = document.getElementById("request-item-template");
-const addItem = document.getElementById("request-add-item");
+const category = document.getElementById("request-category");
+const search = document.getElementById("request-search");
+const noProducts = document.getElementById("request-no-products");
+const review = document.getElementById("request-review");
+const reviewCount = document.getElementById("request-item-count");
+const reviewItems = document.getElementById("request-selected-items");
+const quantities = new Map();
 let account;
 let products = [];
-let categories = [];
 let pending;
-let nextRowNumber = 1;
 
 async function api(url, options) {
   const response = await fetch(url, options);
@@ -25,62 +29,43 @@ async function api(url, options) {
   return result;
 }
 
-function addRow() {
-  const row = rowTemplate.content.firstElementChild.cloneNode(true);
-  const select = row.querySelector("select[name=product_id]");
-  const category = row.querySelector("[data-category-filter]");
-  const search = row.querySelector("input[type=search]");
-  const quantity = row.querySelector("input[name=quantity]");
-  const unit = row.querySelector("[data-product-unit]");
-  const searchStatus = row.querySelector("[role=status]");
-  const [categoryLabel, searchLabel, productLabel, quantityLabel] = row.querySelectorAll("label");
-  category.id = categoryLabel.htmlFor = `request-category-${nextRowNumber}`;
-  search.id = searchLabel.htmlFor = `request-search-${nextRowNumber}`;
-  select.id = productLabel.htmlFor = `request-product-${nextRowNumber}`;
-  quantity.id = quantityLabel.htmlFor = `request-quantity-${nextRowNumber}`;
-  unit.id = `request-unit-${nextRowNumber}`;
-  quantity.setAttribute("aria-describedby", unit.id);
-  nextRowNumber += 1;
-  category.replaceChildren(new Option("All categories", ""), ...categories.map(
-    entry => new Option(entry.name, entry.id),
-  ));
-
-  function filterProducts() {
-    const selected = select.value;
-    const query = search.value.trim().toLowerCase();
-    const matches = products.filter(product =>
-      (!category.value || product.category_id === category.value) &&
-      product.name.toLowerCase().includes(query),
-    );
-    // Searching again should never erase a product already picked for this row.
-    const options = selected && !matches.some(product => product.id === selected)
-      ? [products.find(product => product.id === selected), ...matches]
-      : matches;
-    select.replaceChildren(new Option("Select a product", ""), ...options.map(
-      product => new Option(`${product.name} (${product.unit})`, product.id),
-    ));
-    select.value = selected;
-    searchStatus.hidden = matches.length > 0;
-    searchStatus.textContent = matches.length ? "" : "No products match these filters.";
-  }
-  search.addEventListener("input", filterProducts);
-  category.addEventListener("change", filterProducts);
-  select.addEventListener("change", () => {
-    const product = products.find(entry => entry.id === select.value);
-    unit.hidden = !product;
-    unit.textContent = product ? `Unit: ${product.unit}` : "";
-  });
-  filterProducts();
-  row.querySelector("button").addEventListener("click", () => {
-    row.remove();
-    if (items.childElementCount === 0) addRow();
-    addItem.disabled = items.childElementCount >= 100;
-  });
-  items.append(row);
-  addItem.disabled = items.childElementCount >= 100;
-  return search;
+function renderReview() {
+  const selected = products.filter(product => quantities.has(product.id));
+  review.hidden = !selected.length;
+  reviewCount.textContent = `Review request items (${selected.length})`;
+  reviewItems.replaceChildren(...selected.map(product => {
+    const entry = document.createElement("li");
+    entry.textContent = `${product.name}: ${quantities.get(product.id)} ${product.unit}`;
+    return entry;
+  }));
 }
 
+function renderProducts() {
+  const query = search.value.trim().toLowerCase();
+  const matches = products.filter(product =>
+    (!category.value || product.category_id === category.value) &&
+    product.name.toLowerCase().includes(query),
+  );
+  // The list is only a view. A single draft keyed by product stays intact
+  // when the category or search changes and contains each product only once.
+  items.replaceChildren(...matches.map(product => {
+    const row = rowTemplate.content.firstElementChild.cloneNode(true);
+    const label = row.querySelector("label");
+    const quantity = row.querySelector("input");
+    quantity.id = label.htmlFor = `request-quantity-${product.id}`;
+    label.querySelector("strong").textContent = product.name;
+    label.querySelector("small").textContent = product.unit;
+    quantity.value = quantities.get(product.id) ?? "";
+    quantity.addEventListener("input", () => {
+      const value = quantity.value.trim();
+      if (value) quantities.set(product.id, value);
+      else quantities.delete(product.id);
+      renderReview();
+    });
+    return row;
+  }));
+  noProducts.hidden = matches.length > 0;
+}
 async function showSession(user) {
   account = user;
   loginForm.hidden = Boolean(user);
@@ -98,13 +83,14 @@ async function showSession(user) {
     headers: {"X-Inventory-Owner": user.id},
   });
   products = catalog.products;
-  categories = catalog.categories;
+  category.replaceChildren(new Option("All categories", ""), ...catalog.categories.map(
+    entry => new Option(entry.name, entry.id),
+  ));
   portalStatus.textContent = products.length
     ? `Signed in as ${user.username}.`
     : "The product catalog is empty. Ask the storekeeper to add items before requesting.";
   if (!products.length) return;
-  items.replaceChildren();
-  addRow();
+  renderProducts();
   requestForm.hidden = false;
 }
 
@@ -137,22 +123,24 @@ logout.addEventListener("click", async () => {
   }
 });
 
-addItem.addEventListener("click", () => addRow().focus());
+category.addEventListener("change", () => {
+  search.value = "";
+  renderProducts();
+});
+search.addEventListener("input", renderProducts);
 
 requestForm.addEventListener("submit", async event => {
   event.preventDefault();
   if (fields.disabled) return;
   if (!pending) {
-    const details = Object.fromEntries(new FormData(requestForm));
-    delete details.product_id;
-    delete details.quantity;
+    if (!quantities.size || quantities.size > 100) {
+      requestStatus.textContent = "Enter quantities for 1 to 100 items in one request.";
+      return;
+    }
     pending = {
-      ...details,
+      ...Object.fromEntries(new FormData(requestForm)),
       id: crypto.randomUUID(),
-      items: Array.from(items.children, row => ({
-        product_id: row.querySelector("select[name=product_id]").value,
-        quantity: row.querySelector("input[name=quantity]").value.trim(),
-      })),
+      items: Array.from(quantities, ([product_id, quantity]) => ({product_id, quantity})),
     };
   }
   fields.disabled = true;
@@ -166,8 +154,10 @@ requestForm.addEventListener("submit", async event => {
     });
     pending = null;
     requestForm.reset();
-    items.replaceChildren();
-    addRow();
+    quantities.clear();
+    review.open = false;
+    renderProducts();
+    renderReview();
     requestStatus.textContent = `Request submitted. Reference: ${receipt.id}`;
   } catch (error) {
     // If the response was lost, retry the same payload and ID. The database

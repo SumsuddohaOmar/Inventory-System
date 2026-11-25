@@ -54,27 +54,26 @@
         <label for="request-notes">Remarks (optional)</label>
         <textarea id="request-notes" name="notes" maxlength="500" rows="2"></textarea>
         <h3>Items</h3>
+        <p class="hint">Enter quantities for the items you need. You can switch categories and submit all entered items together.</p>
+        <div class="form-grid">
+          <div><label for="request-category">Category</label><select id="request-category"></select></div>
+          <div><label for="request-search">Search products</label><input id="request-search" type="search" placeholder="Type a product name" autocomplete="off"></div>
+        </div>
+        <p id="request-no-products" role="status" hidden>No products match these filters.</p>
         <div id="request-items"></div>
-        <button id="request-add-item" class="secondary" type="button">Add another item</button>
+        <details id="request-review" hidden>
+          <summary id="request-item-count">Review request items</summary>
+          <ul id="request-selected-items"></ul>
+        </details>
         <button type="submit">Submit request</button>
       </fieldset>
       <p id="request-status" role="status"></p>
     </form>
     <template id="request-item-template">
-      <fieldset class="request-item">
-        <legend>Requested item</legend>
-        <div class="form-grid">
-          <div><label>Category</label><select data-category-filter></select></div>
-          <div><label>Search products</label><input type="search" placeholder="Type a product name" autocomplete="off"></div>
-          <div><label>Product</label><select name="product_id" required></select></div>
-          <div>
-            <label>Quantity</label><input name="quantity" inputmode="decimal" maxlength="40" required>
-            <small class="hint" data-product-unit hidden></small>
-          </div>
-        </div>
-        <p class="hint" role="status" hidden></p>
-        <button type="button" class="secondary">Remove item</button>
-      </fieldset>
+      <div class="bulk-row">
+        <label><strong></strong><small class="hint"></small></label>
+        <input type="text" inputmode="decimal" maxlength="40" placeholder="Qty" autocomplete="off">
+      </div>
     </template>
   </main>
 </body>
