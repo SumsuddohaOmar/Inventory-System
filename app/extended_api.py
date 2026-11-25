@@ -204,7 +204,7 @@ def register(application, path):
         # shared session cookie. Never post its queue under the new account.
         owner = request.headers.get("x-inventory-owner")
         approval_route = route.startswith("/api/mrf/requests/") and route.endswith("/approval")
-        issue_route = route.startswith("/api/mrf/requests/") and route.endswith("/issues")
+        issue_route = route.startswith("/api/mrf/requests/") and route.endswith(("/issues", "/stock"))
         if (route == "/api/mrf/requests" or approval_route or issue_route) and not owner:
             return JSONResponse(status_code=409, content={"detail": "Reload the page to confirm the signed-in account."})
         if route in ("/api/sync", "/api/sync/status") and not owner:

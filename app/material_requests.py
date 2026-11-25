@@ -206,6 +206,7 @@ def register(application, path):
         # Page by the last displayed record so new submissions do not shift
         # the older pages while a storekeeper is reviewing them.
         with database.connect(path) as connection:
+            company_date = stock.company_today(connection)
             where, parameters = "", ()
             if request_id is not None:
                 where, parameters = "WHERE r.id = ?", (str(request_id),)
@@ -252,7 +253,8 @@ def register(application, path):
                     ") ORDER BY issued_at DESC, id DESC", tuple(page),
                 ).fetchall():
                     page[issued["request_id"]]["issues"].append(dict(issued))
-        return {"requests": list(page.values()), "next": rows[24]["id"] if len(rows) > 25 else None}
+        return {"requests": list(page.values()), "next": rows[24]["id"] if len(rows) > 25 else None,
+                "company_date": company_date}
 
     @application.post("/api/mrf/requests", status_code=201)
     def create_request(values: MaterialRequest, request: Request):
@@ -261,6 +263,29 @@ def register(application, path):
     @application.post("/api/mrf/requests/{request_id}/issues", status_code=201)
     def issue_request(request_id: UUID, values: MaterialIssue, request: Request):
         return issue(path, str(request_id), request.state.user, values)
+
+    @application.get("/api/mrf/requests/{request_id}/stock")
+    def request_stock(request_id: UUID, stock_date: date):
+        """Read the dated ledger balance for each product in this request."""
+        identity = str(request_id)
+        with database.connect(path) as connection:
+            if not connection.execute("SELECT 1 FROM material_requests WHERE id=?", (identity,)).fetchone():
+                raise HTTPException(404, "Material request not found.")
+            rows = connection.execute(
+                """SELECT l.product_id, l.precision, p.archived,
+                          MAX(CASE WHEN s.kind='opening' THEN 1 ELSE 0 END) AS opened,
+                          SUM(CASE WHEN s.kind IN ('opening','receive') THEN s.quantity_minor
+                                   WHEN s.kind='issue' THEN -s.quantity_minor ELSE 0 END) AS balance
+                   FROM material_request_lines l
+                   LEFT JOIN products p ON p.id=l.product_id
+                   LEFT JOIN stock_entries s ON s.product_id=p.id AND s.effective_date<=? AND s.voided=0
+                   WHERE l.request_id=?
+                   GROUP BY l.product_id, l.precision, p.archived""", (stock_date.isoformat(), identity),
+            ).fetchall()
+        return {row["product_id"]: {
+            "balance": stock.display(row["balance"], row["precision"]) if row["opened"] and row["archived"] == 0 else None,
+            "available": row["archived"] == 0,
+        } for row in rows}
 
     @application.post("/api/mrf/requests/{request_id}/approval")
     def approve_request(request_id: UUID, request: Request):

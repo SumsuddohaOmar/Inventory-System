@@ -134,8 +134,8 @@ li span { display: block; color: #475f53; }
 .request-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); gap: 8px 16px; }
 .request-meta dt { color: #405d54; font-size: .85rem; }
 .request-meta dd { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
-.request-items-table th, .request-items-table td { white-space: normal; padding: 8px; }
-.request-items-table th:first-child, .request-items-table td:first-child { overflow-wrap: anywhere; }
+.request-items-table th, .request-items-table td { white-space: nowrap; overflow-wrap: normal; padding: 8px; }
+.request-items-table td:first-child { min-width: 12ch; white-space: normal; overflow-wrap: anywhere; }
 .request-items-table :is(th, td):nth-child(n+2):nth-child(-n+4) { text-align: right; font-variant-numeric: tabular-nums; }
 .request-items-table { overflow-x: auto; }
 .request-detail-panel p { overflow-wrap: anywhere; }

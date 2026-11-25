@@ -495,6 +495,7 @@ const requestBack = byId("material-request-back");
 let requestRecords = [];
 let selectedRequest = null;
 let olderRequestCursor = null;
+let requestCompanyDate;
 const pendingIssues = new Map();
 
 function requestApprovalText(record) {
@@ -544,11 +545,16 @@ function renderIssueForm(record) {
   const controls = element("fieldset", undefined, form);
   element("legend", "Record issuance", controls);
   const queued = pendingIssues.get(record.id);
+  const stockDate = requestCompanyDate ?? businessToday();
+  // Keep a future request date for night shifts and default overdue requests
+  // to the current work date. Both dates remain editable before saving.
+  const workDate = record.work_date > stockDate ? record.work_date : stockDate;
   const dates = element("div", undefined, controls);
   dates.className = "form-grid";
+  let stockDateInput;
   for (const [key, label, value] of [
-    ["stock_date", "Actual stock date", queued?.stock_date ?? businessToday()],
-    ["work_date", "Issuance work date", queued?.work_date ?? record.work_date],
+    ["stock_date", "Actual stock date", queued?.stock_date ?? stockDate],
+    ["work_date", "Issuance work date", queued?.work_date ?? workDate],
   ]) {
     const group = element("div", undefined, dates);
     const caption = element("label", label, group);
@@ -558,15 +564,19 @@ function renderIssueForm(record) {
     input.type = "date";
     input.required = true;
     input.value = value;
+    if (key === "stock_date") stockDateInput = input;
   }
-  element("p", "Enter quantities handed out. Leave other items blank. Use the work date the issue belongs to, including next-day night-shift issues.", controls).className = "hint";
+  element("p", "Use the day the stock actually left the store as the stock date. For a night shift collecting for the next day, use that next day as the work date.", controls).className = "hint";
+  element("p", "Enter quantities handed out and leave other items blank.", controls).className = "hint";
   const quantities = new Map();
   const rowErrors = new Map();
+  const stockLabels = new Map();
   for (const item of record.items) {
     const row = element("div", undefined, controls);
     row.className = "bulk-row";
     const label = element("label", item.product, row);
     element("small", `Pending: ${item.pending} ${item.unit}`, label);
+    stockLabels.set(item.product_id, {label: element("small", "", label), unit: item.unit});
     const input = element("input", undefined, row);
     input.id = label.htmlFor = `request-issue-${item.product_id}`;
     input.inputMode = "decimal";
@@ -584,6 +594,28 @@ function renderIssueForm(record) {
     quantities.set(item.product_id, input);
     rowErrors.set(item.product_id, error);
   }
+  let stockLookup = 0;
+  async function showDatedStock() {
+    const lookup = ++stockLookup;
+    const date = stockDateInput.value;
+    for (const {label} of stockLabels.values()) label.textContent = date ? "Checking stock…" : "Choose a stock date.";
+    if (!date) return;
+    try {
+      const balances = await request(`/api/mrf/requests/${record.id}/stock?stock_date=${encodeURIComponent(date)}`);
+      if (lookup !== stockLookup) return;
+      for (const [id, {label, unit}] of stockLabels) {
+        const stock = balances[id];
+        label.textContent = !stock?.available ? "Product unavailable"
+          : stock.balance === null ? "No opening stock by this date"
+          : `Stock on date: ${stock.balance} ${unit}`;
+      }
+    } catch {
+      if (lookup !== stockLookup) return;
+      for (const {label} of stockLabels.values()) label.textContent = "Could not load stock for this date.";
+    }
+  }
+  stockDateInput.addEventListener("input", showDatedStock);
+  void showDatedStock();
   const reasonLabel = element("label", "Reason for issuing above the remaining quantity (if applicable)", controls);
   const reason = element("textarea", undefined, controls);
   reason.id = reasonLabel.htmlFor = "request-excess-reason";
@@ -638,6 +670,7 @@ function renderIssueForm(record) {
     feedback.textContent = "Issue saved. Stock was updated.";
     try {
       const page = await request(`/api/mrf/requests?request_id=${encodeURIComponent(record.id)}`);
+      requestCompanyDate = page.company_date;
       const updated = page.requests[0];
       requestRecords = requestRecords.map(entry => entry.id === record.id ? updated : entry);
       renderRequestList();
@@ -677,6 +710,9 @@ function renderRequestDetail() {
   element("h4", "Requested items", requestDetail);
   const itemTable = element("div", undefined, requestDetail);
   itemTable.className = "request-items-table";
+  itemTable.tabIndex = 0;
+  itemTable.setAttribute("role", "region");
+  itemTable.setAttribute("aria-label", "Requested items table");
   table(["Product", "Requested", "Issued", "Pending", "Unit"], record.items.map(item => [
     item.product, item.quantity, item.issued, item.pending, item.unit,
   ]), itemTable);
@@ -725,6 +761,7 @@ async function loadSubmittedRequests(before = null) {
     // The existing request helper confirms the signed-in account. This route
     // is online-only and outside the browser's offline cache allowlist.
     const page = await request(`/api/mrf/requests${query}`);
+    requestCompanyDate = page.company_date;
     requestRecords = before ? [...requestRecords, ...page.requests] : page.requests;
     if (!requestRecords.some(record => record.id === selectedRequest)) selectedRequest = null;
     renderRequestList();

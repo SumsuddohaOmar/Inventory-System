@@ -124,6 +124,11 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 credentials["username"] = "issuer"
                 session = await client.post("/api/session", json=credentials)
                 issue_headers = {"X-Inventory-Owner": session.json()["id"]}
+                stock_url = f"{endpoint}/{values['id']}/stock"
+                before_opening = await client.get(stock_url, params={"stock_date": "2025-12-31"}, headers=issue_headers)
+                self.assertEqual(before_opening.json()[visible_id], {"balance": None, "available": True})
+                dated_stock = await client.get(stock_url, params={"stock_date": "2026-01-01"}, headers=issue_headers)
+                self.assertEqual(dated_stock.json()[visible_id], {"balance": "10.000", "available": True})
                 bad_issue = {**issuance, "items": [*issuance["items"], {"product_id": archived_id, "quantity": "1"}]}
                 self.assertEqual((await client.post(issuance_url, json=bad_issue, headers=issue_headers)).status_code, 422)
                 saved = await client.post(issuance_url, json=issuance, headers=issue_headers)
@@ -140,3 +145,5 @@ class MaterialCatalogTests(unittest.IsolatedAsyncioTestCase):
                 excess["excess_reason"] = "Additional quantity requested at handover"
                 self.assertEqual((await client.post(issuance_url, json=excess, headers=issue_headers)).status_code, 201)
                 self.assertEqual(stock.get_stock(path, visible_id)["balance"], "8.500")
+                dated_stock = await client.get(stock_url, params={"stock_date": "2026-01-01"}, headers=issue_headers)
+                self.assertEqual(dated_stock.json()[visible_id]["balance"], "8.500")
