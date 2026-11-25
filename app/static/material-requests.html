@@ -64,9 +64,13 @@
       <fieldset class="request-item">
         <legend>Requested item</legend>
         <div class="form-grid">
+          <div><label>Category</label><select data-category-filter></select></div>
           <div><label>Search products</label><input type="search" placeholder="Type a product name" autocomplete="off"></div>
           <div><label>Product</label><select name="product_id" required></select></div>
-          <div><label>Quantity</label><input name="quantity" inputmode="decimal" maxlength="40" required></div>
+          <div>
+            <label>Quantity</label><input name="quantity" inputmode="decimal" maxlength="40" required>
+            <small class="hint" data-product-unit hidden></small>
+          </div>
         </div>
         <p class="hint" role="status" hidden></p>
         <button type="button" class="secondary">Remove item</button>

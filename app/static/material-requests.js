@@ -11,6 +11,7 @@ const rowTemplate = document.getElementById("request-item-template");
 const addItem = document.getElementById("request-add-item");
 let account;
 let products = [];
+let categories = [];
 let pending;
 let nextRowNumber = 1;
 
@@ -26,20 +27,31 @@ async function api(url, options) {
 
 function addRow() {
   const row = rowTemplate.content.firstElementChild.cloneNode(true);
-  const select = row.querySelector("select");
+  const select = row.querySelector("select[name=product_id]");
+  const category = row.querySelector("[data-category-filter]");
   const search = row.querySelector("input[type=search]");
   const quantity = row.querySelector("input[name=quantity]");
+  const unit = row.querySelector("[data-product-unit]");
   const searchStatus = row.querySelector("[role=status]");
-  const [searchLabel, productLabel, quantityLabel] = row.querySelectorAll("label");
+  const [categoryLabel, searchLabel, productLabel, quantityLabel] = row.querySelectorAll("label");
+  category.id = categoryLabel.htmlFor = `request-category-${nextRowNumber}`;
   search.id = searchLabel.htmlFor = `request-search-${nextRowNumber}`;
   select.id = productLabel.htmlFor = `request-product-${nextRowNumber}`;
   quantity.id = quantityLabel.htmlFor = `request-quantity-${nextRowNumber}`;
+  unit.id = `request-unit-${nextRowNumber}`;
+  quantity.setAttribute("aria-describedby", unit.id);
   nextRowNumber += 1;
+  category.replaceChildren(new Option("All categories", ""), ...categories.map(
+    entry => new Option(entry.name, entry.id),
+  ));
 
   function filterProducts() {
     const selected = select.value;
     const query = search.value.trim().toLowerCase();
-    const matches = products.filter(product => product.name.toLowerCase().includes(query));
+    const matches = products.filter(product =>
+      (!category.value || product.category_id === category.value) &&
+      product.name.toLowerCase().includes(query),
+    );
     // Searching again should never erase a product already picked for this row.
     const options = selected && !matches.some(product => product.id === selected)
       ? [products.find(product => product.id === selected), ...matches]
@@ -49,9 +61,15 @@ function addRow() {
     ));
     select.value = selected;
     searchStatus.hidden = matches.length > 0;
-    searchStatus.textContent = matches.length ? "" : "No products match your search.";
+    searchStatus.textContent = matches.length ? "" : "No products match these filters.";
   }
   search.addEventListener("input", filterProducts);
+  category.addEventListener("change", filterProducts);
+  select.addEventListener("change", () => {
+    const product = products.find(entry => entry.id === select.value);
+    unit.hidden = !product;
+    unit.textContent = product ? `Unit: ${product.unit}` : "";
+  });
   filterProducts();
   row.querySelector("button").addEventListener("click", () => {
     row.remove();
@@ -80,6 +98,7 @@ async function showSession(user) {
     headers: {"X-Inventory-Owner": user.id},
   });
   products = catalog.products;
+  categories = catalog.categories;
   portalStatus.textContent = products.length
     ? `Signed in as ${user.username}.`
     : "The product catalog is empty. Ask the storekeeper to add items before requesting.";
@@ -131,7 +150,7 @@ requestForm.addEventListener("submit", async event => {
       ...details,
       id: crypto.randomUUID(),
       items: Array.from(items.children, row => ({
-        product_id: row.querySelector("select").value,
+        product_id: row.querySelector("select[name=product_id]").value,
         quantity: row.querySelector("input[name=quantity]").value.trim(),
       })),
     };
